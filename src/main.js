@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, screen, nativeImage, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, screen, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { fetchUsage, credPath } = require('./usage');
