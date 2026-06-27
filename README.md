@@ -21,8 +21,9 @@ Requires Claude Code installed and logged in. The binaries are unsigned (see
 ## What it shows
 
 - Live **5-hour** and **weekly** usage bars with reset countdowns and color coding
-- **Detailed mode**: today's Claude Code tokens (input / output / cache), the
-  equivalent API value you'd have paid ("saved vs API"), and a per-model split
+- **Detailed mode**: today's Claude Code tokens (input / output / cache), their
+  equivalent **API value** (what that usage would cost on the API — already
+  included in your Max plan, not an extra charge), and a per-model split
 - **37 languages**, auto-detecting your OS language (right-to-left included)
 
 ## How it works (and what it touches)
@@ -43,7 +44,7 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   separately and won't touch it — so if you go a long stretch using only those, expect
   that nudge until you next run any Claude Code command. (See [`src/usage.js`](src/usage.js).)
 - The token-count / cost panel reads Claude Code's local logs in
-  `~/.claude/projects/*.jsonl` (read-only, never touches the network).
+  `~/.claude/projects/**/*.jsonl` (read-only, never touches the network).
   (See [`src/usage-jsonl.js`](src/usage-jsonl.js).)
 - Nothing else leaves your machine — no account, no telemetry, no tracking. (The
   packaged app does check GitHub for app updates on launch and every 6h; the
