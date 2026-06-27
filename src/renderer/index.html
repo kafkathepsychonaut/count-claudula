@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>Count Claudula</title>
+  <style>
+    :root {
+      --ivory: #F4F1EA; --ivory-soft: #FAF8F3; --line: #E2DDD1; --track: #E7E2D6;
+      --ink: #2A2722; --ink-dim: #8A8275;
+      --coral: #D97757; --terra: #C2562F; --rust: #9B3415;
+      --hover: rgba(0,0,0,0.06);
+    }
+    [data-theme="bloodthirsty"] {
+      --ivory: #1B1113; --ivory-soft: #241719; --line: #3A2024; --track: #2E1C20;
+      --ink: #F2E2E2; --ink-dim: #A88A8C;
+      --coral: #D23A33; --terra: #AE2823; --rust: #7E1714;
+      --hover: rgba(255,255,255,0.08);
+    }
+    [data-theme="zombie"] {
+      --ivory: #141017; --ivory-soft: #1C1722; --line: #33283F; --track: #271E33;
+      --ink: #E6F0DE; --ink-dim: #8FA086;
+      --coral: #6DBF4A; --terra: #A98F2E; --rust: #9B57C9;
+      --hover: rgba(255,255,255,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100vh; background: transparent;
+      font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink);
+      user-select: none; cursor: default; overflow: hidden;
+    }
+    body { padding: 11px; }
+    .card {
+      height: 100%;
+      background: linear-gradient(180deg, var(--ivory-soft), var(--ivory));
+      border: 1px solid var(--line); border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(40,30,20,0.22), 0 1px 0 rgba(255,255,255,0.6) inset;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .brand-art { width: 22px; height: 22px; flex: 0 0 auto; display: block; }
+    .mini-art { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
+    .titlebar {
+      -webkit-app-region: drag;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 9px 5px 12px; flex: 0 0 auto;
+    }
+    .brand { display: inline-flex; align-items: center; gap: 7px; }
+    .wordmark { font-size: 13px; font-weight: 650; letter-spacing: 0.01em; color: var(--ink); white-space: nowrap; }
+    .controls { -webkit-app-region: no-drag; display: flex; gap: 0; flex: 0 0 auto; }
+    .icon-btn {
+      -webkit-app-region: no-drag; width: 19px; height: 19px;
+      border: none; background: transparent; color: var(--ink-dim);
+      border-radius: 7px; font-size: 14px; line-height: 1; cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+    }
+    .icon-btn:hover { background: var(--hover); color: var(--ink); }
+    .body { padding: 3px 13px 11px; display: flex; flex-direction: column; gap: 11px; flex: 1 1 auto; }
+    .row { display: flex; flex-direction: column; gap: 5px; }
+    .row-head { display: flex; align-items: baseline; justify-content: space-between; }
+    .label { font-size: 12px; color: var(--ink-dim); }
+    .pct { font-size: 16px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--coral); }
+    .track { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; box-shadow: inset 0 1px 1px rgba(0,0,0,0.05); }
+    .fill { height: 100%; width: 0%; border-radius: 99px; background: var(--coral); transition: width 0.5s ease, background 0.3s ease; }
+    .reset { font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-height: 13px; }
+    .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 1px; }
+    .status { font-size: 10px; color: var(--ink-dim); }
+    .status.err { color: var(--rust); }
+    .status.stale { color: var(--terra); }
+    .models { font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+    .models.ov { color: var(--coral); font-weight: 600; }
+    .models.ov-warn { color: var(--terra); font-weight: 600; }
+    .models.ov-crit { color: var(--rust); font-weight: 700; }
+    .divider { height: 1px; background: var(--line); margin: 9px 0 6px; }
+    .ext-title { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+    .tok-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+    .tok-row .k { color: var(--ink-dim); }
+    .tok-row .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+    .tok-row.total { margin-top: 4px; border-top: 1px dashed var(--line); padding-top: 5px; }
+    .tok-row.total .v { color: var(--coral); }
+    .tok-bymodel { margin-top: 5px; display: flex; flex-direction: column; gap: 1px; }
+    .bm-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
+    .bm-row .bk { color: var(--ink-dim); text-transform: capitalize; }
+    .bm-row .bv { font-variant-numeric: tabular-nums; }
+    .bm-row .bpct { color: var(--coral); font-weight: 600; margin-right: 6px; }
+    .ext-note { font-size: 9.5px; color: var(--ink-dim); margin-top: 5px; line-height: 1.35; }
+    #ext { display: none; flex-direction: column; }
+    body.mode-extended #ext { display: flex; }
+    .fill.ok { background: var(--coral); } .fill.warn { background: var(--terra); } .fill.crit { background: var(--rust); }
+    .pct.ok { color: var(--coral); } .pct.warn { color: var(--terra); } .pct.crit { color: var(--rust); }
+    .mini {
+      display: none; align-items: center; gap: 7px; padding: 0 13px; height: 100%;
+      -webkit-app-region: drag; font-size: 13px; font-weight: 700;
+      font-variant-numeric: tabular-nums; color: var(--ink);
+    }
+    .mini-sep { color: var(--ink-dim); font-weight: 400; }
+    .mini-art {
+      -webkit-app-region: no-drag; box-sizing: content-box; cursor: pointer;
+      padding: 5px; margin: -5px; border-radius: 7px;
+    }
+    .mini-art:hover { background: var(--hover); }
+    body.collapsed .body { display: none; }
+    body.collapsed .titlebar { display: none; }
+    body.collapsed .mini { display: flex; }
+  </style>
+</head>
+<body>
+  <div id="card" class="card">
+    <div class="titlebar">
+      <span class="brand">
+        <img class="brand-art" src="assets/claudula.png" width="22" height="22" alt="Count Claudula" />
+        <span class="wordmark">Count Claudula</span>
+      </span>
+      <div class="controls">
+        <button id="btn-mode" class="icon-btn" data-i18n-title="t_detailed" title="detailed view" aria-label="mode">&#x229e;</button>
+        <button id="btn-refresh" class="icon-btn" data-i18n-title="t_refresh" title="refresh" aria-label="refresh">&#x21bb;</button>
+        <button id="btn-settings" class="icon-btn" data-i18n-title="set_title" title="Settings" aria-label="settings">&#x2699;&#xfe0e;</button>
+        <button id="btn-collapse" class="icon-btn" data-i18n-title="t_minimize" title="minimize" aria-label="minimize">&#x2212;</button>
+        <button id="btn-hide" class="icon-btn" data-i18n-title="t_hide" title="hide to tray" aria-label="hide to tray">&#x2913;</button>
+      </div>
+    </div>
+
+    <div id="body" class="body">
+      <div class="row">
+        <div class="row-head">
+          <span class="label" data-i18n="five_hour">5 hours</span>
+          <span class="pct" id="five-pct">--</span>
+        </div>
+        <div class="track"><div class="fill" id="five-fill"></div></div>
+        <div class="reset" id="five-reset">&nbsp;</div>
+      </div>
+
+      <div class="row">
+        <div class="row-head">
+          <span class="label" data-i18n="week">week</span>
+          <span class="pct" id="seven-pct">--</span>
+        </div>
+        <div class="track"><div class="fill" id="seven-fill"></div></div>
+        <div class="reset" id="seven-reset">&nbsp;</div>
+      </div>
+
+      <div class="foot">
+        <span id="status" class="status" data-i18n="connecting">connecting…</span>
+        <span id="models" class="models"></span>
+      </div>
+
+      <div id="ext">
+        <div class="divider"></div>
+        <div class="ext-title" data-i18n="cc_today">Claude Code · today</div>
+        <div class="tok-row"><span class="k" data-i18n="input">input</span><span class="v" id="tok-in">–</span></div>
+        <div class="tok-row"><span class="k" data-i18n="output">output</span><span class="v" id="tok-out">–</span></div>
+        <div class="tok-row"><span class="k" data-i18n="cache_read">cache · read</span><span class="v" id="tok-cr">–</span></div>
+        <div class="tok-row"><span class="k" data-i18n="cache_write">cache · write</span><span class="v" id="tok-cw">–</span></div>
+        <div class="tok-row total"><span class="k" data-i18n="equiv_cost">equivalent cost</span><span class="v" id="tok-cost">–</span></div>
+        <div class="tok-bymodel" id="tok-bymodel"></div>
+        <div class="ext-note" id="tok-note" data-i18n="cost_note">Claude Code (CLI) only · ~API value, already included in your Max plan</div>
+      </div>
+    </div>
+
+    <div id="mini" class="mini">
+      <img class="mini-art" id="mini-art" src="assets/claudula.png" width="20" height="20" data-i18n-title="t_expand" title="expand" role="button" alt="expand" />
+      <span id="mini-five">--</span>
+      <span class="mini-sep">·</span>
+      <span id="mini-seven">--</span>
+    </div>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

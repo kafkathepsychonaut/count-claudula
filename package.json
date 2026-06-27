@@ -1,0 +1,80 @@
+{
+  "name": "claude-count",
+  "version": "1.0.0",
+  "description": "Floating always-on-top widget that shows how much of your Claude 5-hour and weekly limits you've used — plus today's Claude Code token cost.",
+  "main": "src/main.js",
+  "author": "Kafka the Psychonaut <kafkathepsychonaut@gmail.com> (https://www.kafkathepsychonaut.io)",
+  "homepage": "https://www.kafkathepsychonaut.io",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kafkathepsychonaut/count-claudula.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "usage": "node src/usage.js",
+    "icon": "python scripts/gen-icon.py",
+    "dist": "electron-builder",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.countclaudula.app",
+    "productName": "Count Claudula",
+    "copyright": "© 2024-2026 Kafka the Psychonaut",
+    "publish": {
+      "provider": "github",
+      "owner": "kafkathepsychonaut",
+      "repo": "count-claudula",
+      "releaseType": "release"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "portable": {
+      "artifactName": "Count Claudula.exe"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Count Claudula",
+      "artifactName": "Count-Claudula-Setup-${version}.exe"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "identity": null
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility",
+      "icon": "build/icon.png"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

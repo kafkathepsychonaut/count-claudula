@@ -1,0 +1,38 @@
+name: Release
+
+# Push a vX.Y.Z tag and this builds Windows + macOS + Linux in the cloud and
+# publishes the artifacts (with auto-update metadata) to that tag's release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Tag must match package.json version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG pkg=$PKG"
+          test "$TAG" = "$PKG" || { echo "::error::tag $GITHUB_REF_NAME does not match package.json $PKG"; exit 1; }
+      # build/icon.png is committed (1024px) — no need for the Python generator in CI.
+      - name: Build & publish
+        run: npx --no-install electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
