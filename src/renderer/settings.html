@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; img-src 'self' data:;" />
+  <title>Count Claudula — Settings</title>
+  <style>
+    :root {
+      --ivory: #F4F1EA; --ivory-soft: #FAF8F3; --line: #E2DDD1; --track: #E7E2D6;
+      --ink: #2A2722; --ink-dim: #8A8275; --coral: #D97757; --hover: rgba(0,0,0,0.06);
+    }
+    [data-theme="bloodthirsty"] {
+      --ivory: #1B1113; --ivory-soft: #241719; --line: #3A2024; --track: #2E1C20;
+      --ink: #F2E2E2; --ink-dim: #A88A8C; --coral: #D23A33; --hover: rgba(255,255,255,0.08);
+    }
+    [data-theme="zombie"] {
+      --ivory: #141017; --ivory-soft: #1C1722; --line: #33283F; --track: #271E33;
+      --ink: #E6F0DE; --ink-dim: #8FA086; --coral: #6DBF4A; --hover: rgba(255,255,255,0.07);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100vh; background: var(--ivory);
+      font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink);
+      user-select: none; cursor: default;
+    }
+    body { padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; }
+    .head { display: flex; align-items: center; gap: 9px; }
+    .head img { width: 22px; height: 22px; }
+    .head h1 { font-size: 15px; font-weight: 650; }
+    .group { display: flex; flex-direction: column; gap: 12px; }
+    .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .field label { font-size: 13px; }
+    select {
+      font: inherit; font-size: 13px; color: var(--ink);
+      background: var(--ivory-soft); border: 1px solid var(--line);
+      border-radius: 8px; padding: 5px 8px; cursor: pointer; min-width: 150px;
+    }
+    .switch { position: relative; width: 38px; height: 22px; flex: 0 0 auto; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0; background: var(--track); border-radius: 99px;
+      transition: background 0.15s; cursor: pointer;
+    }
+    .slider::before {
+      content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .switch input:checked + .slider { background: var(--coral); }
+    .switch input:checked + .slider::before { transform: translateX(16px); }
+    .hint { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; margin-top: -6px; }
+    .disclaimer { font-size: 9px; color: var(--ink-dim); line-height: 1.35; margin-top: 8px; opacity: 0.85; }
+    .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    button.donate { font: inherit; font-size: 12px; color: var(--coral); background: transparent; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 4px 2px; }
+    button.donate:hover { text-decoration: underline; }
+    .coffee { font-size: 13px; }
+    button.close {
+      font: inherit; font-size: 13px; color: var(--ink);
+      background: var(--ivory-soft); border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 16px; cursor: pointer;
+    }
+    button.close:hover { background: var(--hover); }
+    .field-col { display: flex; flex-direction: column; gap: 4px; }
+    .fb { gap: 6px; margin-top: 2px; }
+    .fb > label { font-size: 13px; }
+    textarea { font: inherit; font-size: 12px; color: var(--ink); background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; resize: none; width: 100%; }
+    textarea:focus { outline: none; border-color: var(--coral); }
+    .fb-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .fb-status { font-size: 11px; color: var(--coral); }
+    button.send { font: inherit; font-size: 12px; color: #fff; background: var(--coral); border: none; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+    button.send:hover { filter: brightness(1.05); }
+    button.send:disabled { opacity: 0.5; cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="head">
+    <img src="assets/claudula.png" alt="" />
+    <h1 data-i18n="set_title">Settings</h1>
+  </div>
+
+  <div class="group">
+    <div class="field">
+      <label data-i18n="set_language">Language</label>
+      <select id="lang"></select>
+    </div>
+
+    <div class="field">
+      <label data-i18n="set_theme">Theme</label>
+      <select id="theme"></select>
+    </div>
+
+    <div class="field">
+      <label data-i18n="set_start">Start with system</label>
+      <span class="switch"><input type="checkbox" id="start" /><span class="slider"></span></span>
+    </div>
+
+  </div>
+
+  <div class="field-col fb">
+    <label data-i18n="set_feedback">Feedback</label>
+    <textarea id="fb-text" rows="3" data-i18n-ph="feedback_ph"></textarea>
+    <div class="fb-row">
+      <span class="fb-status" id="fb-status"></span>
+      <button class="send" id="fb-send" data-i18n="feedback_send">Send</button>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    Reads your local Claude credential to query an undocumented Anthropic endpoint;
+    this may be against Anthropic's Terms — use at your own risk. Not affiliated with
+    or endorsed by Anthropic. Claude™ and Claude Code™ are trademarks of Anthropic, PBC.
+  </div>
+
+  <div class="foot">
+    <button class="donate" id="btn-donate" title="Ko-fi">
+      <span class="coffee">&#x2615;</span><span data-i18n="set_donate">Support my projects</span>
+    </button>
+    <button class="close" id="btn-close" data-i18n="set_close">Close</button>
+  </div>
+
+  <script src="i18n.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
