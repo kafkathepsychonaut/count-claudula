@@ -25,6 +25,8 @@ Requires Claude Code installed and logged in. The binaries are unsigned (see
   equivalent **API value** (what that usage would cost on the API — already
   included in your Max plan, not an extra charge), and a per-model split
 - **37 languages**, auto-detecting your OS language (right-to-left included)
+- **3 themes** — *Classic* (light), *Bloodthirsty* (dark, blood-red) and *Zombie*
+  (dark, toxic-green) — switch in Settings
 
 ## How it works (and what it touches)
 
