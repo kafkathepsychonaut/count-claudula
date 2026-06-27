@@ -37,8 +37,11 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   `$CLAUDE_CONFIG_DIR`) — the same file Claude Code maintains — and makes one
   read-only GET to that endpoint. **It never writes that file and never refreshes
   or mints tokens** (it doesn't impersonate the official client). The token is kept
-  fresh by Claude Code itself as you use it; if it goes stale the widget shows
-  *"token expired"*. (See [`src/usage.js`](src/usage.js).)
+  fresh by Claude Code itself as you use it, and the widget re-checks the moment that
+  file changes; if it goes stale the widget nudges you to *"open Claude Code"*. Only
+  Claude Code refreshes this token — Claude Desktop, Cowork and the web app sign in
+  separately and won't touch it — so if you go a long stretch using only those, expect
+  that nudge until you next run any Claude Code command. (See [`src/usage.js`](src/usage.js).)
 - The token-count / cost panel reads Claude Code's local logs in
   `~/.claude/projects/*.jsonl` (read-only, never touches the network).
   (See [`src/usage-jsonl.js`](src/usage-jsonl.js).)

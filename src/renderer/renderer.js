@@ -117,10 +117,14 @@ function renderModels(u) {
 function renderStatus(u) {
   const el = $('status');
   if (stale) {
+    // expired = token went stale; it's a normal idle state (Claude Code refreshes
+    // it), so nudge calmly with the fix in the tooltip rather than an alarming red.
     el.textContent = expiredFlag ? t('expired') : t('offline');
-    el.className = 'status ' + (expiredFlag ? 'err' : 'stale');
+    el.title = expiredFlag ? t('expired_hint') : '';
+    el.className = 'status ' + (expiredFlag ? 'idle' : 'stale');
     return;
   }
+  el.title = '';
   const when = new Date(u.fetchedAt);
   const hh = String(when.getHours()).padStart(2, '0');
   const mm = String(when.getMinutes()).padStart(2, '0');

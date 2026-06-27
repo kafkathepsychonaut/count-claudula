@@ -159,19 +159,63 @@
   };
   for (const k in COST) if (DICT[k]) DICT[k].equiv_cost = COST[k];
 
+  // Token went stale. Claude Code refreshes it (and only Claude Code does — the
+  // widget never mints tokens), so the status is a short, actionable nudge rather
+  // than an alarming "expired", with the one-step fix in the tooltip (expired_hint).
   const EXPIRED = {
-    en: 'token expired', es: 'token caducado', pt: 'token expirado', fr: 'jeton expiré',
-    de: 'Token abgelaufen', it: 'token scaduto', nl: 'token verlopen', pl: 'token wygasł',
-    ru: 'токен истёк', uk: 'токен прострочено', cs: 'token vypršel', sk: 'token vypršal',
-    ro: 'token expirat', hu: 'lejárt token', el: 'το token έληξε', sv: 'token utgånget',
-    da: 'token udløbet', fi: 'token vanhentunut', nb: 'token utløpt', tr: 'jeton süresi doldu',
-    ca: 'token caducat', bg: 'токенът изтече', hr: 'token istekao', sr: 'токен истекао',
-    lt: 'raktas baigėsi', ja: 'トークン期限切れ', ko: '토큰 만료됨', zh: '令牌已过期',
-    vi: 'token hết hạn', th: 'โทเค็นหมดอายุ', id: 'token kedaluwarsa', ms: 'token tamat tempoh',
-    fil: 'paso na ang token', hi: 'टोकन समाप्त', ar: 'انتهت صلاحية الرمز', he: 'הטוקן פג',
-    fa: 'توکن منقضی شد',
+    en: 'open Claude Code', es: 'abre Claude Code', pt: 'abra o Claude Code', fr: 'ouvrez Claude Code',
+    de: 'Claude Code öffnen', it: 'apri Claude Code', nl: 'open Claude Code', pl: 'otwórz Claude Code',
+    ru: 'откройте Claude Code', uk: 'відкрийте Claude Code', cs: 'otevřete Claude Code', sk: 'otvorte Claude Code',
+    ro: 'deschide Claude Code', hu: 'nyisd meg a Claude Code-ot', el: 'άνοιξε το Claude Code', sv: 'öppna Claude Code',
+    da: 'åbn Claude Code', fi: 'avaa Claude Code', nb: 'åpne Claude Code', tr: "Claude Code'u aç",
+    ca: 'obre Claude Code', bg: 'отворете Claude Code', hr: 'otvori Claude Code', sr: 'отвори Claude Code',
+    lt: 'atidarykite Claude Code', ja: 'Claude Code を開く', ko: 'Claude Code 열기', zh: '打开 Claude Code',
+    vi: 'mở Claude Code', th: 'เปิด Claude Code', id: 'buka Claude Code', ms: 'buka Claude Code',
+    fil: 'buksan ang Claude Code', hi: 'Claude Code खोलें', ar: 'افتح Claude Code', he: 'פתח את Claude Code',
+    fa: 'Claude Code را باز کنید',
   };
   for (const k in EXPIRED) if (DICT[k]) DICT[k].expired = EXPIRED[k];
+
+  const EXPIRED_HINT = {
+    en: 'Only Claude Code refreshes this token — run any Claude Code command to update it.',
+    es: 'Solo Claude Code renueva este token: ejecuta cualquier comando de Claude Code para actualizarlo.',
+    pt: 'Só o Claude Code renova este token — rode qualquer comando do Claude Code para atualizá-lo.',
+    fr: "Seul Claude Code renouvelle ce jeton — exécutez n'importe quelle commande Claude Code pour le mettre à jour.",
+    de: 'Nur Claude Code erneuert dieses Token – führen Sie einen beliebigen Claude-Code-Befehl aus, um es zu aktualisieren.',
+    it: 'Solo Claude Code rinnova questo token: esegui un comando qualsiasi di Claude Code per aggiornarlo.',
+    nl: 'Alleen Claude Code vernieuwt dit token — voer een willekeurig Claude Code-commando uit om het bij te werken.',
+    pl: 'Tylko Claude Code odświeża ten token — uruchom dowolną komendę Claude Code, aby go zaktualizować.',
+    ru: 'Только Claude Code обновляет этот токен — выполните любую команду Claude Code, чтобы обновить его.',
+    uk: 'Лише Claude Code оновлює цей токен — виконайте будь-яку команду Claude Code, щоб оновити його.',
+    cs: 'Tento token obnovuje jen Claude Code — spusťte libovolný příkaz Claude Code pro jeho aktualizaci.',
+    sk: 'Tento token obnovuje len Claude Code — spustite ľubovoľný príkaz Claude Code na jeho aktualizáciu.',
+    ro: 'Doar Claude Code reînnoiește acest token — rulează orice comandă Claude Code pentru a-l actualiza.',
+    hu: 'Ezt a tokent csak a Claude Code újítja meg — futtass bármilyen Claude Code parancsot a frissítéséhez.',
+    el: 'Μόνο το Claude Code ανανεώνει αυτό το token — εκτέλεσε οποιαδήποτε εντολή Claude Code για να το ενημερώσεις.',
+    sv: 'Endast Claude Code förnyar denna token — kör valfritt Claude Code-kommando för att uppdatera den.',
+    da: 'Kun Claude Code fornyer dette token — kør en hvilken som helst Claude Code-kommando for at opdatere det.',
+    fi: 'Vain Claude Code uusii tämän tokenin — suorita mikä tahansa Claude Code -komento päivittääksesi sen.',
+    nb: 'Bare Claude Code fornyer dette tokenet — kjør en hvilken som helst Claude Code-kommando for å oppdatere det.',
+    tr: 'Bu jetonu yalnızca Claude Code yeniler — güncellemek için herhangi bir Claude Code komutu çalıştırın.',
+    ca: 'Només Claude Code renova aquest token — executa qualsevol ordre de Claude Code per actualitzar-lo.',
+    bg: 'Само Claude Code обновява този токен — изпълнете произволна команда на Claude Code, за да го обновите.',
+    hr: 'Samo Claude Code obnavlja ovaj token — pokreni bilo koju Claude Code naredbu da ga ažuriraš.',
+    sr: 'Само Claude Code обнавља овај токен — покрени било коју Claude Code команду да га ажурираш.',
+    lt: 'Šį raktą atnaujina tik Claude Code — paleiskite bet kurią Claude Code komandą jam atnaujinti.',
+    ja: 'このトークンを更新できるのは Claude Code だけです。任意の Claude Code コマンドを実行して更新してください。',
+    ko: '이 토큰은 Claude Code만 갱신합니다. 아무 Claude Code 명령을 실행해 갱신하세요.',
+    zh: '只有 Claude Code 能续期此令牌——运行任意 Claude Code 命令即可更新。',
+    vi: 'Chỉ Claude Code mới làm mới token này — chạy bất kỳ lệnh Claude Code nào để cập nhật.',
+    th: 'มีเพียง Claude Code ที่ต่ออายุโทเค็นนี้ได้ — รันคำสั่ง Claude Code ใดก็ได้เพื่ออัปเดต',
+    id: 'Hanya Claude Code yang memperbarui token ini — jalankan perintah Claude Code apa pun untuk memperbaruinya.',
+    ms: 'Hanya Claude Code memperbaharui token ini — jalankan sebarang arahan Claude Code untuk mengemas kininya.',
+    fil: 'Claude Code lang ang nag-re-refresh ng token na ito — magpatakbo ng anumang Claude Code command para i-update ito.',
+    hi: 'इस टोकन को केवल Claude Code नवीनीकृत करता है — इसे अपडेट करने के लिए कोई भी Claude Code कमांड चलाएँ।',
+    ar: 'يُجدِّد هذا الرمز Claude Code فقط — شغِّل أي أمر من Claude Code لتحديثه.',
+    he: 'רק Claude Code מחדש את הטוקן הזה — הריצו פקודת Claude Code כלשהי כדי לעדכן אותו.',
+    fa: 'فقط Claude Code این توکن را تازه می‌کند — هر فرمان Claude Code را اجرا کنید تا به‌روز شود.',
+  };
+  for (const k in EXPIRED_HINT) if (DICT[k]) DICT[k].expired_hint = EXPIRED_HINT[k];
 
   // paid overage (prefix before the amount: "extra R$12,30")
   const OVERAGE = {
