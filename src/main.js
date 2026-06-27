@@ -2,7 +2,7 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, screen, nativeImage, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const { fetchUsage } = require('./usage');
+const { fetchUsage, credPath } = require('./usage');
 const { todayUsage } = require('./usage-jsonl');
 const { makeTrayIcon } = require('./icon');
 const i18n = require('./renderer/i18n');
@@ -229,6 +229,29 @@ function pollNow() {
   scheduleNext(0);
 }
 
+// Watch the credential file so we re-poll the instant Claude Code rewrites it.
+// Without this, a stale "token expired" would linger until the next timed poll
+// (up to ~90s) even though Claude Code already refreshed the token. We watch the
+// *directory* (not the file) so the watcher survives the atomic rename-replace
+// Claude Code uses when rewriting the file. Read-only — our own polls never write
+// the file, so this can't feed back on itself.
+let credWatcher = null;
+let credWatchDebounce = null;
+function watchCredentials() {
+  let dir, file;
+  try { const p = credPath(); dir = path.dirname(p); file = path.basename(p); }
+  catch (_) { return; }
+  try {
+    credWatcher = fs.watch(dir, (_evt, fname) => {
+      if (fname && fname !== file) return; // ignore other files in ~/.claude
+      clearTimeout(credWatchDebounce);
+      // small debounce: the rename-replace fires several events; let it settle
+      credWatchDebounce = setTimeout(() => { if (!paused) pollNow(); }, 400);
+    });
+    credWatcher.on('error', () => { try { credWatcher.close(); } catch (_) {} credWatcher = null; });
+  } catch (_) { /* dir missing/unwatchable: timed polling still covers recovery */ }
+}
+
 // ---- Tray ----
 function updateTrayTitle(usage) {
   if (!tray) return;
@@ -387,6 +410,7 @@ if (!gotLock) {
     wirePowerEvents();
     applyStartup();
     pollNow();
+    watchCredentials();
     setupUpdater();
   });
   app.on('window-all-closed', (e) => { /* stays alive in the tray */ });
