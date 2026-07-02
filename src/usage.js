@@ -10,10 +10,13 @@ const os = require('os');
 const path = require('path');
 
 const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
+// Honest self-identification, version kept in lockstep with package.json
+// (works both inside Electron and via `node src/usage.js`).
+const VERSION = require('../package.json').version;
 const OAUTH_HEADERS = {
   'anthropic-beta': 'oauth-2025-04-20',
   'anthropic-version': '2023-06-01',
-  'user-agent': 'claude-count/1.0 (status-monitor)',
+  'user-agent': 'count-claudula/' + VERSION + ' (status-monitor)',
 };
 const EXPIRY_SKEW_MS = 90 * 1000;
 
@@ -32,8 +35,13 @@ function readToken() {
   return { token: o.accessToken, expired };
 }
 
-function expiredError() {
-  const e = new Error('token expired'); e.expired = true; return e;
+// `status` is only set when the SERVER rejected us (e.g. 401) — a locally
+// detected expiry never touched the network, and the poller's circuit breaker
+// must only count real server rejections.
+function expiredError(status) {
+  const e = new Error('token expired'); e.expired = true;
+  if (status) e.status = status;
+  return e;
 }
 
 function normalizeWindow(w) {
@@ -76,16 +84,19 @@ async function fetchUsage() {
     clearTimeout(timer);
   }
 
-  if (res.status === 401) throw expiredError();
+  if (res.status === 401) throw expiredError(401);
   if (res.status === 429 || res.status === 529) {
     const e = new Error('rate limited (' + res.status + ')');
     e.rateLimited = true;
+    e.status = res.status;
     e.retryAfter = parseInt(res.headers.get('retry-after'), 10) || 0;
     throw e;
   }
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error('usage endpoint ' + res.status + ': ' + body.slice(0, 200));
+    const e = new Error('usage endpoint ' + res.status + ': ' + body.slice(0, 200));
+    e.status = res.status;
+    throw e;
   }
 
   const d = await res.json();

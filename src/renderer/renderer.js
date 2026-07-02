@@ -1,9 +1,10 @@
 'use strict';
 const api = window.claudeCount;
 
-let latest = null;        // last usage received
-let stale = false;        // last fetch failed -> showing stale data
-let expiredFlag = false;  // failed because the token expired (read-only mode)
+let latest = null;            // last usage received
+let stale = false;            // last fetch failed -> showing stale data
+let expiredFlag = false;      // failed because the token expired (read-only mode)
+let unavailableFlag = false;  // circuit breaker tripped: the endpoint keeps refusing
 let countdownTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -119,9 +120,22 @@ function renderStatus(u) {
   if (stale) {
     // expired = token went stale; it's a normal idle state (Claude Code refreshes
     // it), so nudge calmly with the fix in the tooltip rather than an alarming red.
-    el.textContent = expiredFlag ? t('expired') : t('offline');
-    el.title = expiredFlag ? t('expired_hint') : '';
-    el.className = 'status ' + (expiredFlag ? 'idle' : 'stale');
+    // expired wins over unavailable: reopening Claude Code is the fix for both.
+    if (expiredFlag) {
+      el.textContent = t('expired');
+      el.title = t('expired_hint');
+      el.className = 'status idle';
+    } else if (unavailableFlag) {
+      // circuit breaker: the endpoint keeps refusing, so polling stopped —
+      // say so honestly instead of pretending to be merely offline.
+      el.textContent = t('unavailable');
+      el.title = t('unavailable_hint');
+      el.className = 'status stale';
+    } else {
+      el.textContent = t('offline');
+      el.title = '';
+      el.className = 'status stale';
+    }
     return;
   }
   el.title = '';
@@ -191,12 +205,14 @@ api.onUsage((u) => {
   latest = u;
   stale = false;
   expiredFlag = false;
+  unavailableFlag = false;
   renderAll();
 });
 
-api.onError(({ last, expired }) => {
+api.onError(({ last, expired, unavailable }) => {
   stale = true;
   expiredFlag = !!expired;
+  unavailableFlag = !!unavailable;
   if (last) latest = last;
   renderAll();
 });

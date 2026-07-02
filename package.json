@@ -1,6 +1,7 @@
 {
-  "name": "claude-count",
-  "version": "1.0.1",
+  "name": "count-claudula",
+  "version": "1.0.2",
+  "productName": "Count Claudula",
   "description": "Floating always-on-top widget that shows how much of your Claude 5-hour and weekly limits you've used — plus today's Claude Code token cost.",
   "main": "src/main.js",
   "author": "Kafka the Psychonaut <kafkathepsychonaut@gmail.com> (https://www.kafkathepsychonaut.io)",
@@ -23,7 +24,6 @@
   },
   "build": {
     "appId": "com.countclaudula.app",
-    "productName": "Count Claudula",
     "copyright": "© 2024-2026 Kafka the Psychonaut",
     "publish": {
       "provider": "github",
