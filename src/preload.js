@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('claudeCount', {
   refresh: () => ipcRenderer.send('ui:refresh'),
   collapse: (next) => ipcRenderer.send('ui:collapse', next),
   setMode: (m) => ipcRenderer.send('ui:mode', m),
+  setExtMore: (v) => ipcRenderer.send('ui:extmore', v),
+  reportHeight: (h) => ipcRenderer.send('ui:height', h),
   hide: () => ipcRenderer.send('ui:hide'),
   quit: () => ipcRenderer.send('ui:quit'),
   openSettings: () => ipcRenderer.send('ui:settings'),

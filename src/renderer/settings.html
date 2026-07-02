@@ -48,6 +48,13 @@
     .switch input:checked + .slider { background: var(--coral); }
     .switch input:checked + .slider::before { transform: translateX(16px); }
     .hint { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; margin-top: -6px; }
+    .cmd {
+      font-family: Consolas, "Cascadia Mono", monospace; font-size: 10px; color: var(--ink);
+      background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px;
+      padding: 6px 8px; width: 100%; margin-top: 4px; cursor: copy;
+    }
+    .cmd:focus { outline: none; border-color: var(--coral); }
+    .copied { color: var(--coral); font-size: 10px; margin-left: 4px; }
     .disclaimer { font-size: 9px; color: var(--ink-dim); line-height: 1.35; margin-top: 8px; opacity: 0.85; }
     .foot { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     button.donate { font: inherit; font-size: 12px; color: var(--coral); background: transparent; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; padding: 4px 2px; }
@@ -91,6 +98,18 @@
     <div class="field">
       <label data-i18n="set_start">Start with system</label>
       <span class="switch"><input type="checkbox" id="start" /><span class="slider"></span></span>
+    </div>
+
+    <div class="field">
+      <label data-i18n="set_source">Data source</label>
+      <select id="source">
+        <option value="endpoint">Anthropic endpoint</option>
+        <option value="statusline">Claude Code statusLine</option>
+      </select>
+    </div>
+    <div class="hint" id="source-hint" style="display: none;">
+      <span data-i18n="source_hint">Use this command as your statusLine in Claude Code (settings.json). Data refreshes only while Claude Code is running.</span>
+      <input class="cmd" id="source-cmd" readonly /><span class="copied" id="source-copied"></span>
     </div>
 
   </div>

@@ -75,8 +75,7 @@
     .tok-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; padding: 2px 0; }
     .tok-row .k { color: var(--ink-dim); }
     .tok-row .v { font-variant-numeric: tabular-nums; font-weight: 600; }
-    .tok-row.total { margin-top: 4px; border-top: 1px dashed var(--line); padding-top: 5px; }
-    .tok-row.total .v { color: var(--coral); }
+    .tok-row.total .v { color: var(--coral); font-weight: 700; }
     .tok-bymodel { margin-top: 5px; display: flex; flex-direction: column; gap: 1px; }
     .bm-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
     .bm-row .bk { color: var(--ink-dim); text-transform: capitalize; }
@@ -85,6 +84,22 @@
     .ext-note { font-size: 9.5px; color: var(--ink-dim); margin-top: 5px; line-height: 1.35; }
     #ext { display: none; flex-direction: column; }
     body.mode-extended #ext { display: flex; }
+    .ext-toggle {
+      display: flex; align-items: center; gap: 5px; margin-top: 6px;
+      font-size: 10px; color: var(--ink-dim); cursor: pointer; user-select: none;
+      border-radius: 6px; padding: 2px 4px; width: fit-content;
+    }
+    .ext-toggle:hover { background: var(--hover); color: var(--ink); }
+    .ext-toggle .chev { display: inline-block; transition: transform 0.15s ease; font-size: 9px; }
+    body.ext-more .ext-toggle .chev { transform: rotate(180deg); }
+    #ext-more { display: none; flex-direction: column; }
+    body.ext-more #ext-more { display: flex; }
+    .lim-row { display: flex; align-items: center; gap: 7px; padding: 2px 0; font-size: 11px; }
+    .lim-row .lk { color: var(--ink-dim); flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lim-row .track { flex: 1 1 auto; height: 6px; }
+    .lim-row .lv { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 32px; text-align: right; }
+    .lim-row .lv.ok { color: var(--coral); } .lim-row .lv.warn { color: var(--terra); } .lim-row .lv.crit { color: var(--rust); }
+    #limits:not(:empty) { margin-bottom: 8px; }
     .fill.ok { background: var(--coral); } .fill.warn { background: var(--terra); } .fill.crit { background: var(--rust); }
     .pct.ok { color: var(--coral); } .pct.warn { color: var(--terra); } .pct.crit { color: var(--rust); }
     .mini {
@@ -145,14 +160,24 @@
 
       <div id="ext">
         <div class="divider"></div>
+        <div class="ext-title" id="limits-title" data-i18n="limits_title">model limits</div>
+        <div id="limits"></div>
         <div class="ext-title" data-i18n="cc_today">Claude Code · today</div>
-        <div class="tok-row"><span class="k" data-i18n="input">input</span><span class="v" id="tok-in">–</span></div>
-        <div class="tok-row"><span class="k" data-i18n="output">output</span><span class="v" id="tok-out">–</span></div>
-        <div class="tok-row"><span class="k" data-i18n="cache_read">cache · read</span><span class="v" id="tok-cr">–</span></div>
-        <div class="tok-row"><span class="k" data-i18n="cache_write">cache · write</span><span class="v" id="tok-cw">–</span></div>
         <div class="tok-row total"><span class="k" data-i18n="equiv_cost">equivalent cost</span><span class="v" id="tok-cost">–</span></div>
-        <div class="tok-bymodel" id="tok-bymodel"></div>
-        <div class="ext-note" id="tok-note" data-i18n="cost_note">Claude Code (CLI) only · ~API value, already included in your Max plan</div>
+        <div class="tok-row"><span class="k" data-i18n="avg_7d">avg / day (7d)</span><span class="v" id="tok-avg7">–</span></div>
+
+        <div id="ext-more-toggle" class="ext-toggle" role="button" aria-expanded="false">
+          <span class="chev">&#x25be;</span><span id="ext-more-label" data-i18n="t_more">more details</span>
+        </div>
+        <div id="ext-more">
+          <div class="tok-row"><span class="k" data-i18n="input">input</span><span class="v" id="tok-in">–</span></div>
+          <div class="tok-row"><span class="k" data-i18n="output">output</span><span class="v" id="tok-out">–</span></div>
+          <div class="tok-row"><span class="k" data-i18n="cache_read">cache · read</span><span class="v" id="tok-cr">–</span></div>
+          <div class="tok-row"><span class="k" data-i18n="cache_write">cache · write</span><span class="v" id="tok-cw">–</span></div>
+          <div class="tok-bymodel" id="tok-bymodel"></div>
+          <div class="tok-row"><span class="k" data-i18n="last_7d">last 7 days</span><span class="v" id="tok-week">–</span></div>
+          <div class="ext-note" id="tok-note" data-i18n="cost_note">Claude Code (CLI) only · ~API value, already included in your Max plan</div>
+        </div>
       </div>
     </div>
 

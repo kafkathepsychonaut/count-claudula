@@ -336,6 +336,146 @@
   };
   for (const k in UNAVAILABLE_HINT) if (DICT[k]) DICT[k].unavailable_hint = UNAVAILABLE_HINT[k];
 
+  // Fine-detail pane (extended mode): the more/less toggle, the scoped-limit
+  // section title, and the 7-day cost rows.
+  const MORE = {
+    en: 'more details', es: 'más detalles', pt: 'mais detalhes', fr: 'plus de détails',
+    de: 'mehr Details', it: 'più dettagli', nl: 'meer details', pl: 'więcej szczegółów',
+    ru: 'подробнее', uk: 'докладніше', cs: 'více podrobností', sk: 'viac podrobností',
+    ro: 'mai multe detalii', hu: 'több részlet', el: 'περισσότερες λεπτομέρειες', sv: 'fler detaljer',
+    da: 'flere detaljer', fi: 'lisätiedot', nb: 'flere detaljer', tr: 'daha fazla ayrıntı',
+    ca: 'més detalls', bg: 'повече детайли', hr: 'više detalja', sr: 'више детаља',
+    lt: 'daugiau informacijos', ja: '詳細を表示', ko: '자세히 보기', zh: '更多详情',
+    vi: 'chi tiết hơn', th: 'รายละเอียดเพิ่มเติม', id: 'detail lainnya', ms: 'butiran lanjut',
+    fil: 'higit pang detalye', hi: 'और विवरण', ar: 'مزيد من التفاصيل', he: 'פרטים נוספים',
+    fa: 'جزئیات بیشتر',
+  };
+  for (const k in MORE) if (DICT[k]) DICT[k].t_more = MORE[k];
+
+  const LESS = {
+    en: 'fewer details', es: 'menos detalles', pt: 'menos detalhes', fr: 'moins de détails',
+    de: 'weniger Details', it: 'meno dettagli', nl: 'minder details', pl: 'mniej szczegółów',
+    ru: 'свернуть', uk: 'згорнути', cs: 'méně podrobností', sk: 'menej podrobností',
+    ro: 'mai puține detalii', hu: 'kevesebb részlet', el: 'λιγότερες λεπτομέρειες', sv: 'färre detaljer',
+    da: 'færre detaljer', fi: 'vähemmän tietoja', nb: 'færre detaljer', tr: 'daha az ayrıntı',
+    ca: 'menys detalls', bg: 'по-малко детайли', hr: 'manje detalja', sr: 'мање детаља',
+    lt: 'mažiau informacijos', ja: '詳細を隠す', ko: '간단히 보기', zh: '收起详情',
+    vi: 'thu gọn', th: 'ย่อรายละเอียด', id: 'lebih sedikit detail', ms: 'kurang butiran',
+    fil: 'mas kaunting detalye', hi: 'कम विवरण', ar: 'تفاصيل أقل', he: 'פחות פרטים',
+    fa: 'جزئیات کمتر',
+  };
+  for (const k in LESS) if (DICT[k]) DICT[k].t_less = LESS[k];
+
+  const LIMITS_TITLE = {
+    en: 'model limits', es: 'límites por modelo', pt: 'limites por modelo', fr: 'limites par modèle',
+    de: 'Limits pro Modell', it: 'limiti per modello', nl: 'limieten per model', pl: 'limity wg modelu',
+    ru: 'лимиты по моделям', uk: 'ліміти за моделями', cs: 'limity podle modelu', sk: 'limity podľa modelu',
+    ro: 'limite per model', hu: 'modellenkénti limitek', el: 'όρια ανά μοντέλο', sv: 'gränser per modell',
+    da: 'grænser pr. model', fi: 'mallikohtaiset rajat', nb: 'grenser per modell', tr: 'modele göre limitler',
+    ca: 'límits per model', bg: 'лимити по модел', hr: 'limiti po modelu', sr: 'лимити по моделу',
+    lt: 'limitai pagal modelį', ja: 'モデル別の上限', ko: '모델별 한도', zh: '按模型限额',
+    vi: 'giới hạn theo mô hình', th: 'ลิมิตตามโมเดล', id: 'batas per model', ms: 'had mengikut model',
+    fil: 'limitasyon bawat model', hi: 'मॉडल अनुसार सीमाएँ', ar: 'حدود حسب النموذج', he: 'מגבלות לפי מודל',
+    fa: 'محدودیت به تفکیک مدل',
+  };
+  for (const k in LIMITS_TITLE) if (DICT[k]) DICT[k].limits_title = LIMITS_TITLE[k];
+
+  const AVG7 = {
+    en: 'avg / day (7d)', es: 'media/día (7d)', pt: 'média/dia (7d)', fr: 'moy./jour (7j)',
+    de: 'Ø/Tag (7T)', it: 'media/giorno (7g)', nl: 'gem./dag (7d)', pl: 'śr./dzień (7d)',
+    ru: 'сред./день (7д)', uk: 'серед./день (7д)', cs: 'prům./den (7d)', sk: 'priem./deň (7d)',
+    ro: 'medie/zi (7z)', hu: 'átlag/nap (7n)', el: 'μ.ό./ημέρα (7ημ)', sv: 'snitt/dag (7d)',
+    da: 'gns./dag (7d)', fi: 'ka./päivä (7pv)', nb: 'snitt/dag (7d)', tr: 'ort./gün (7g)',
+    ca: 'mitjana/dia (7d)', bg: 'ср./ден (7д)', hr: 'pros./dan (7d)', sr: 'прос./дан (7д)',
+    lt: 'vid./dienai (7d)', ja: '日平均（7日）', ko: '일평균(7일)', zh: '日均（7天）',
+    vi: 'TB/ngày (7n)', th: 'เฉลี่ย/วัน (7วัน)', id: 'rata-rata/hari (7h)', ms: 'purata/hari (7h)',
+    fil: 'avg/araw (7a)', hi: 'औसत/दिन (7दि)', ar: 'متوسط/يوم (7أيام)', he: 'ממוצע/יום (7י)',
+    fa: 'میانگین/روز (۷روز)',
+  };
+  for (const k in AVG7) if (DICT[k]) DICT[k].avg_7d = AVG7[k];
+
+  const LAST7 = {
+    en: 'last 7 days', es: 'últimos 7 días', pt: 'últimos 7 dias', fr: '7 derniers jours',
+    de: 'letzte 7 Tage', it: 'ultimi 7 giorni', nl: 'afgelopen 7 dagen', pl: 'ostatnie 7 dni',
+    ru: 'последние 7 дней', uk: 'останні 7 днів', cs: 'posledních 7 dní', sk: 'posledných 7 dní',
+    ro: 'ultimele 7 zile', hu: 'elmúlt 7 nap', el: 'τελευταίες 7 ημέρες', sv: 'senaste 7 dagarna',
+    da: 'seneste 7 dage', fi: 'viimeiset 7 päivää', nb: 'siste 7 dager', tr: 'son 7 gün',
+    ca: 'últims 7 dies', bg: 'последните 7 дни', hr: 'zadnjih 7 dana', sr: 'последњих 7 дана',
+    lt: 'paskutinės 7 dienos', ja: '過去7日間', ko: '지난 7일', zh: '过去 7 天',
+    vi: '7 ngày qua', th: '7 วันที่ผ่านมา', id: '7 hari terakhir', ms: '7 hari lepas',
+    fil: 'nakaraang 7 araw', hi: 'पिछले 7 दिन', ar: 'آخر 7 أيام', he: '7 הימים האחרונים',
+    fa: '۷ روز گذشته',
+  };
+  for (const k in LAST7) if (DICT[k]) DICT[k].last_7d = LAST7[k];
+
+  // label for JSONL lines whose model ID matches no known tier
+  const TIER_OTHER = {
+    en: 'other', es: 'otros', pt: 'outros', fr: 'autres', de: 'andere', it: 'altri',
+    nl: 'overig', pl: 'inne', ru: 'другие', uk: 'інші', cs: 'ostatní', sk: 'ostatné',
+    ro: 'altele', hu: 'egyéb', el: 'άλλα', sv: 'övriga', da: 'andre', fi: 'muut',
+    nb: 'andre', tr: 'diğer', ca: 'altres', bg: 'други', hr: 'ostalo', sr: 'остало',
+    lt: 'kita', ja: 'その他', ko: '기타', zh: '其他', vi: 'khác', th: 'อื่นๆ',
+    id: 'lainnya', ms: 'lain-lain', fil: 'iba pa', hi: 'अन्य', ar: 'أخرى', he: 'אחר',
+    fa: 'سایر',
+  };
+  for (const k in TIER_OTHER) if (DICT[k]) DICT[k].tier_other = TIER_OTHER[k];
+
+  // Data source selector (Settings): live endpoint vs Claude Code statusLine.
+  const SOURCE = {
+    en: 'Data source', es: 'Fuente de datos', pt: 'Fonte de dados', fr: 'Source de données',
+    de: 'Datenquelle', it: 'Origine dati', nl: 'Gegevensbron', pl: 'Źródło danych',
+    ru: 'Источник данных', uk: 'Джерело даних', cs: 'Zdroj dat', sk: 'Zdroj dát',
+    ro: 'Sursă de date', hu: 'Adatforrás', el: 'Πηγή δεδομένων', sv: 'Datakälla',
+    da: 'Datakilde', fi: 'Tietolähde', nb: 'Datakilde', tr: 'Veri kaynağı',
+    ca: 'Font de dades', bg: 'Източник на данни', hr: 'Izvor podataka', sr: 'Извор података',
+    lt: 'Duomenų šaltinis', ja: 'データソース', ko: '데이터 소스', zh: '数据来源',
+    vi: 'Nguồn dữ liệu', th: 'แหล่งข้อมูล', id: 'Sumber data', ms: 'Sumber data',
+    fil: 'Pinagmulan ng data', hi: 'डेटा स्रोत', ar: 'مصدر البيانات', he: 'מקור נתונים',
+    fa: 'منبع داده',
+  };
+  for (const k in SOURCE) if (DICT[k]) DICT[k].set_source = SOURCE[k];
+
+  const SOURCE_HINT = {
+    en: 'Use this command as your statusLine in Claude Code (settings.json). Data refreshes only while Claude Code is running.',
+    es: 'Usa este comando como tu statusLine en Claude Code (settings.json). Los datos solo se actualizan mientras Claude Code está en ejecución.',
+    pt: 'Use este comando como seu statusLine no Claude Code (settings.json). Os dados só atualizam enquanto o Claude Code está rodando.',
+    fr: 'Utilisez cette commande comme statusLine dans Claude Code (settings.json). Les données ne se mettent à jour que pendant que Claude Code est en cours d’exécution.',
+    de: 'Diesen Befehl als statusLine in Claude Code (settings.json) verwenden. Die Daten aktualisieren sich nur, während Claude Code läuft.',
+    it: 'Usa questo comando come statusLine in Claude Code (settings.json). I dati si aggiornano solo mentre Claude Code è in esecuzione.',
+    nl: 'Gebruik dit commando als je statusLine in Claude Code (settings.json). De gegevens verversen alleen terwijl Claude Code draait.',
+    pl: 'Użyj tego polecenia jako statusLine w Claude Code (settings.json). Dane odświeżają się tylko, gdy Claude Code działa.',
+    ru: 'Используйте эту команду как statusLine в Claude Code (settings.json). Данные обновляются только пока Claude Code запущен.',
+    uk: 'Використовуйте цю команду як statusLine у Claude Code (settings.json). Дані оновлюються лише поки Claude Code запущено.',
+    cs: 'Použijte tento příkaz jako statusLine v Claude Code (settings.json). Data se obnovují jen, když Claude Code běží.',
+    sk: 'Použite tento príkaz ako statusLine v Claude Code (settings.json). Dáta sa obnovujú len, kým Claude Code beží.',
+    ro: 'Folosește această comandă ca statusLine în Claude Code (settings.json). Datele se actualizează doar cât timp Claude Code rulează.',
+    hu: 'Használd ezt a parancsot statusLine-ként a Claude Code-ban (settings.json). Az adatok csak addig frissülnek, amíg a Claude Code fut.',
+    el: 'Χρησιμοποίησε αυτή την εντολή ως statusLine στο Claude Code (settings.json). Τα δεδομένα ενημερώνονται μόνο όσο τρέχει το Claude Code.',
+    sv: 'Använd detta kommando som din statusLine i Claude Code (settings.json). Data uppdateras bara medan Claude Code körs.',
+    da: 'Brug denne kommando som din statusLine i Claude Code (settings.json). Data opdateres kun, mens Claude Code kører.',
+    fi: 'Käytä tätä komentoa statusLine-asetuksena Claude Codessa (settings.json). Tiedot päivittyvät vain, kun Claude Code on käynnissä.',
+    nb: 'Bruk denne kommandoen som statusLine i Claude Code (settings.json). Data oppdateres bare mens Claude Code kjører.',
+    tr: 'Bu komutu Claude Code’da statusLine olarak kullanın (settings.json). Veriler yalnızca Claude Code çalışırken güncellenir.',
+    ca: 'Fes servir aquesta ordre com a statusLine al Claude Code (settings.json). Les dades només s’actualitzen mentre el Claude Code s’executa.',
+    bg: 'Използвайте тази команда като statusLine в Claude Code (settings.json). Данните се обновяват само докато Claude Code работи.',
+    hr: 'Koristi ovu naredbu kao statusLine u Claude Codeu (settings.json). Podaci se osvježavaju samo dok Claude Code radi.',
+    sr: 'Користи ову команду као statusLine у Claude Code-у (settings.json). Подаци се освежавају само док Claude Code ради.',
+    lt: 'Naudokite šią komandą kaip statusLine Claude Code programoje (settings.json). Duomenys atsinaujina tik kol Claude Code veikia.',
+    ja: 'このコマンドを Claude Code の statusLine に設定してください（settings.json）。データは Claude Code の実行中のみ更新されます。',
+    ko: '이 명령을 Claude Code의 statusLine으로 설정하세요(settings.json). 데이터는 Claude Code가 실행 중일 때만 갱신됩니다.',
+    zh: '将此命令设置为 Claude Code 的 statusLine（settings.json）。数据仅在 Claude Code 运行时刷新。',
+    vi: 'Dùng lệnh này làm statusLine trong Claude Code (settings.json). Dữ liệu chỉ cập nhật khi Claude Code đang chạy.',
+    th: 'ใช้คำสั่งนี้เป็น statusLine ใน Claude Code (settings.json) ข้อมูลจะรีเฟรชเฉพาะตอนที่ Claude Code กำลังทำงาน',
+    id: 'Gunakan perintah ini sebagai statusLine di Claude Code (settings.json). Data hanya diperbarui saat Claude Code berjalan.',
+    ms: 'Gunakan arahan ini sebagai statusLine dalam Claude Code (settings.json). Data hanya dikemas kini semasa Claude Code berjalan.',
+    fil: 'Gamitin ang command na ito bilang statusLine sa Claude Code (settings.json). Nagre-refresh lang ang data habang tumatakbo ang Claude Code.',
+    hi: 'इस कमांड को Claude Code में अपने statusLine के रूप में उपयोग करें (settings.json)। डेटा केवल तभी ताज़ा होता है जब Claude Code चल रहा हो।',
+    ar: 'استخدم هذا الأمر كـ statusLine في Claude Code ‏(settings.json). تتحدّث البيانات فقط أثناء تشغيل Claude Code.',
+    he: 'השתמשו בפקודה זו כ-statusLine ב-Claude Code ‏(settings.json). הנתונים מתעדכנים רק כאשר Claude Code פועל.',
+    fa: 'این فرمان را به عنوان statusLine در Claude Code استفاده کنید (settings.json). داده‌ها فقط هنگام اجرای Claude Code تازه می‌شوند.',
+  };
+  for (const k in SOURCE_HINT) if (DICT[k]) DICT[k].source_hint = SOURCE_HINT[k];
+
   const ALIAS = { no: 'nb', nn: 'nb', iw: 'he', tl: 'fil', in: 'id' };
 
   function normalize(loc) {
