@@ -288,6 +288,12 @@ function renderTokens(tk) {
   const wk = tk.week || null;
   $('tok-avg7').textContent = wk ? '$' + (wk.avgPerDay || 0).toFixed(2) : '–';
   $('tok-week').textContent = wk ? '$' + (wk.cost || 0).toFixed(2) : '–';
+  // what today's cache reads would have cost as regular input
+  $('tok-save').textContent = '$' + (tk.savings || 0).toFixed(2);
+  // linear projection: cost so far / fraction of the day elapsed (needs a
+  // little runway before it means anything)
+  const dayFrac = (Date.now() - new Date().setHours(0, 0, 0, 0)) / 86400000;
+  $('tok-proj').textContent = dayFrac > 0.05 ? '$' + ((tk.cost || 0) / dayFrac).toFixed(2) : '–';
   reportHeight();
 }
 

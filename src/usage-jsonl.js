@@ -37,7 +37,7 @@ const fileCache = new Map();
 let cacheDay = 0;
 
 function emptyAgg() {
-  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, byModel: {} };
+  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, savings: 0, byModel: {} };
 }
 
 // Stream one file line by line (don't load it whole). One pass fills two
@@ -75,6 +75,8 @@ async function aggregateFile(fp, todayMs, weekMs) {
     const m = agg.byModel[t] || (agg.byModel[t] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
     m.input += inp; m.output += out; m.cacheRead += cr; m.cacheWrite += cwTot; m.cost += lineCost;
     agg.input += inp; agg.output += out; agg.cacheRead += cr; agg.cacheWrite += cwTot; agg.cost += lineCost;
+    // what those cache reads would have cost as regular input — the cache win
+    agg.savings += cr * (p.in - p.read) / 1e6;
   }
   return { agg, weekCost };
 }
@@ -111,6 +113,7 @@ async function todayUsage() {
   const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const byModel = {};
   let cost = 0;
+  let savings = 0;
   let weekCost = 0;
 
   for (const { fp, size, mtimeMs } of files) {
@@ -125,6 +128,7 @@ async function todayUsage() {
     weekCost += entry.weekCost;
     totals.input += a.input; totals.output += a.output; totals.cacheRead += a.cacheRead; totals.cacheWrite += a.cacheWrite;
     cost += a.cost;
+    savings += a.savings || 0;
     for (const [t, v] of Object.entries(a.byModel)) {
       const m = byModel[t] || (byModel[t] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
       m.input += v.input; m.output += v.output; m.cacheRead += v.cacheRead; m.cacheWrite += v.cacheWrite; m.cost += v.cost;
@@ -133,7 +137,7 @@ async function todayUsage() {
 
   for (const k of fileCache.keys()) if (!seen.has(k)) fileCache.delete(k); // prune gone files
 
-  return { at: Date.now(), totals, cost, byModel, week: { cost: weekCost, avgPerDay: weekCost / 7 } };
+  return { at: Date.now(), totals, cost, savings, byModel, week: { cost: weekCost, avgPerDay: weekCost / 7 } };
 }
 
 module.exports = { todayUsage };

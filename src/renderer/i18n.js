@@ -420,6 +420,36 @@
   };
   for (const k in TIER_OTHER) if (DICT[k]) DICT[k].tier_other = TIER_OTHER[k];
 
+  // Fine-detail pane, round two: what today's cache reads would have cost as
+  // regular input, and today's cost extrapolated to the full day.
+  const CACHE_SAVINGS = {
+    en: 'cache savings', es: 'ahorro por caché', pt: 'economia de cache', fr: 'économies de cache',
+    de: 'Cache-Ersparnis', it: 'risparmio cache', nl: 'cachebesparing', pl: 'oszczędność cache',
+    ru: 'экономия кэша', uk: 'економія кешу', cs: 'úspora cache', sk: 'úspora cache',
+    ro: 'economie cache', hu: 'cache-megtakarítás', el: 'εξοικονόμηση cache', sv: 'cachebesparing',
+    da: 'cachebesparelse', fi: 'välimuistisäästö', nb: 'cachebesparelse', tr: 'önbellek tasarrufu',
+    ca: 'estalvi per memòria cau', bg: 'спестено от кеш', hr: 'ušteda cachea', sr: 'уштеда кеша',
+    lt: 'talpyklos sutaupymas', ja: 'キャッシュ節約', ko: '캐시 절감', zh: '缓存节省',
+    vi: 'tiết kiệm nhờ cache', th: 'ประหยัดจากแคช', id: 'penghematan cache', ms: 'penjimatan cache',
+    fil: 'natipid sa cache', hi: 'कैश बचत', ar: 'توفير الذاكرة المؤقتة', he: 'חיסכון ממטמון',
+    fa: 'صرفه‌جویی کش',
+  };
+  for (const k in CACHE_SAVINGS) if (DICT[k]) DICT[k].cache_savings = CACHE_SAVINGS[k];
+
+  const DAY_PROJ = {
+    en: 'projected today', es: 'proyección del día', pt: 'projeção do dia', fr: 'projection du jour',
+    de: 'Tagesprognose', it: 'proiezione del giorno', nl: 'prognose vandaag', pl: 'prognoza dnia',
+    ru: 'прогноз на день', uk: 'прогноз на день', cs: 'denní odhad', sk: 'denný odhad',
+    ro: 'proiecția zilei', hu: 'napi előrejelzés', el: 'πρόβλεψη ημέρας', sv: 'prognos idag',
+    da: 'prognose i dag', fi: 'päiväennuste', nb: 'prognose i dag', tr: 'günlük tahmin',
+    ca: 'projecció del dia', bg: 'прогноза за деня', hr: 'projekcija dana', sr: 'пројекција дана',
+    lt: 'dienos prognozė', ja: '本日の予測', ko: '오늘 예상', zh: '今日预计',
+    vi: 'dự kiến hôm nay', th: 'คาดการณ์วันนี้', id: 'proyeksi hari ini', ms: 'unjuran hari ini',
+    fil: 'tinatayang ngayong araw', hi: 'आज का अनुमान', ar: 'توقع اليوم', he: 'תחזית להיום',
+    fa: 'برآورد امروز',
+  };
+  for (const k in DAY_PROJ) if (DICT[k]) DICT[k].day_projection = DAY_PROJ[k];
+
   // Data source selector (Settings): live endpoint vs Claude Code statusLine.
   const SOURCE = {
     en: 'Data source', es: 'Fuente de datos', pt: 'Fonte de dados', fr: 'Source de données',
