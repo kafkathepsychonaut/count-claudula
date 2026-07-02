@@ -46,6 +46,8 @@ let mode = 'simple';         // 'simple' | 'extended'
 let extMore = false;         // extended mode: fine-detail pane open (arrow toggle)
 let extHeight = 0;           // renderer-measured content height for extended mode
 let lastGood = null;         // last usage that succeeded (to show stale)
+let lastError = null;        // last usage:error payload (replayed to a fresh renderer;
+                             // the boot poll often finishes before the window loads)
 let lastTokens = null;       // last aggregate of Claude Code tokens
 let settingsWin = null;
 let updateAvailable = false; // a newer release exists (metadata only, nothing downloaded)
@@ -178,6 +180,7 @@ function createWindow() {
     win.show();
     win.webContents.send('ui:init', { collapsed, mode, extMore, locale: effectiveLocale(), theme: getSettings().theme });
     if (lastGood) win.webContents.send('usage:update', lastGood);
+    if (lastError) win.webContents.send('usage:error', lastError);
     if (lastTokens) win.webContents.send('tokens:update', lastTokens);
     win.webContents.send('update:state', updateUiState());
   });
@@ -267,14 +270,12 @@ async function poll() {
       try {
         const usage = readStatusline(app.getPath('userData'));
         lastGood = usage;
+        lastError = null;
         if (win) win.webContents.send('usage:update', usage);
         updateTrayTitle(usage);
       } catch (err) {
-        if (win) {
-          win.webContents.send('usage:error', {
-            message: err.message, expired: !!err.expired, at: Date.now(), last: lastGood,
-          });
-        }
+        lastError = { message: err.message, expired: !!err.expired, at: Date.now(), last: lastGood };
+        if (win) win.webContents.send('usage:error', lastError);
       }
       scheduleNext(POLL_ACTIVE_MS);
       return;
@@ -289,6 +290,7 @@ async function poll() {
     try {
       const usage = await fetchUsage();
       lastGood = usage;
+      lastError = null;
       rlBackoff = 0;   // recovered: reset the rate-limit backoff
       rejected4xx = 0; // and re-arm the circuit breaker
       if (win) win.webContents.send('usage:update', usage);
@@ -302,18 +304,23 @@ async function poll() {
         rejected4xx = 0;
       } else if (Number.isInteger(status) && status >= 400 && status < 500) {
         rejected4xx++; // the server actively refused us (401/403/404/410/...)
-      } else if (err && err.expired && !status) {
-        // locally detected expiry — no request was made; leave the breaker as-is
+      } else if (err && (err.noCredential || (err.expired && !status))) {
+        // locally detected (no request was made) — leave the breaker as-is
       } else {
         rejected4xx = 0; // network blip / 5xx: transient, not a rejection
       }
       const tripped = rejected4xx >= BREAKER_TRIP;
-      if (win) {
-        win.webContents.send('usage:error', {
-          message: err.message, expired: !!err.expired, unavailable: tripped, at: Date.now(), last: lastGood,
-        });
-      }
-      if (err && err.rateLimited) {
+      lastError = {
+        message: err.message, expired: !!err.expired, noCredential: !!err.noCredential,
+        unavailable: tripped, at: Date.now(), last: lastGood,
+      };
+      if (win) win.webContents.send('usage:error', lastError);
+      if (err && err.noCredential) {
+        // API-key / Console account: a steady state, not an outage. Poll at the
+        // calm cadence — the credential watcher re-polls instantly if a
+        // subscription login ever appears.
+        scheduleNext(POLL_ACTIVE_MS);
+      } else if (err && err.rateLimited) {
         // 429/529: back off for real (exponential up to 30 min), honoring Retry-After
         rlBackoff = rlBackoff ? Math.min(rlBackoff * 2, 30 * 60 * 1000) : 5 * 60 * 1000;
         scheduleNext(Math.max(rlBackoff, (err.retryAfter || 0) * 1000));

@@ -450,6 +450,72 @@
   };
   for (const k in DAY_PROJ) if (DICT[k]) DICT[k].day_projection = DAY_PROJ[k];
 
+  // API-key / Console login: subscription usage windows don't exist for those
+  // accounts — a steady state, not an error. The token panel still works.
+  const NOCRED = {
+    en: 'API account — no usage windows', es: 'cuenta API — sin ventanas de uso',
+    pt: 'conta API — sem janelas de uso', fr: 'compte API — pas de fenêtres d’usage',
+    de: 'API-Konto — keine Nutzungsfenster', it: 'account API — nessuna finestra di utilizzo',
+    nl: 'API-account — geen gebruiksvensters', pl: 'konto API — brak okien zużycia',
+    ru: 'API-аккаунт — нет окон лимитов', uk: 'API-акаунт — немає вікон лімітів',
+    cs: 'API účet — bez oken využití', sk: 'API účet — bez okien využitia',
+    ro: 'cont API — fără ferestre de utilizare', hu: 'API-fiók — nincsenek használati ablakok',
+    el: 'λογαριασμός API — χωρίς παράθυρα χρήσης', sv: 'API-konto — inga användningsfönster',
+    da: 'API-konto — ingen forbrugsvinduer', fi: 'API-tili — ei käyttöikkunoita',
+    nb: 'API-konto — ingen bruksvinduer', tr: 'API hesabı — kullanım penceresi yok',
+    ca: 'compte API — sense finestres d’ús', bg: 'API акаунт — без прозорци за използване',
+    hr: 'API račun — bez prozora potrošnje', sr: 'API налог — без прозора потрошње',
+    lt: 'API paskyra — nėra naudojimo langų', ja: 'APIアカウント — 使用枠なし',
+    ko: 'API 계정 — 사용량 창 없음', zh: 'API 账户 — 无用量窗口',
+    vi: 'tài khoản API — không có khung mức dùng', th: 'บัญชี API — ไม่มีกรอบการใช้งาน',
+    id: 'akun API — tanpa jendela pemakaian', ms: 'akaun API — tiada tetingkap penggunaan',
+    fil: 'API account — walang usage window', hi: 'API खाता — उपयोग विंडो नहीं',
+    ar: 'حساب API — لا نوافذ استخدام', he: 'חשבון API — אין חלונות שימוש',
+    fa: 'حساب API — بدون پنجره مصرف',
+  };
+  for (const k in NOCRED) if (DICT[k]) DICT[k].nocred = NOCRED[k];
+
+  const NOCRED_HINT = {
+    en: 'This Claude Code login uses an API key (Console billing), which has no 5-hour/weekly windows. The Claude Code token panel below still works.',
+    es: 'Este inicio de sesión de Claude Code usa una API key (facturación por Console), que no tiene ventanas de 5 horas/semana. El panel de tokens de Claude Code sigue funcionando.',
+    pt: 'Este login do Claude Code usa API key (cobrança via Console), que não tem janelas de 5h/semana. O painel de tokens do Claude Code continua funcionando.',
+    fr: 'Cette session Claude Code utilise une clé API (facturation Console), sans fenêtres de 5 h/semaine. Le panneau de jetons Claude Code fonctionne toujours.',
+    de: 'Dieser Claude-Code-Login nutzt einen API-Schlüssel (Console-Abrechnung) ohne 5-Stunden-/Wochenfenster. Das Claude-Code-Token-Panel funktioniert weiterhin.',
+    it: 'Questo accesso a Claude Code usa una API key (fatturazione Console), senza finestre di 5 ore/settimana. Il pannello dei token di Claude Code continua a funzionare.',
+    nl: 'Deze Claude Code-login gebruikt een API-sleutel (Console-facturering), zonder 5-uurs/weekvensters. Het Claude Code-tokenpaneel blijft werken.',
+    pl: 'To logowanie Claude Code używa klucza API (rozliczenia Console), bez okien 5-godzinnych/tygodniowych. Panel tokenów Claude Code nadal działa.',
+    ru: 'Этот вход в Claude Code использует API-ключ (оплата через Console), у которого нет окон 5 часов/неделя. Панель токенов Claude Code продолжает работать.',
+    uk: 'Цей вхід у Claude Code використовує API-ключ (оплата через Console), без вікон 5 годин/тиждень. Панель токенів Claude Code далі працює.',
+    cs: 'Toto přihlášení Claude Code používá API klíč (účtování přes Console), bez oken 5 hodin/týden. Panel tokenů Claude Code dál funguje.',
+    sk: 'Toto prihlásenie Claude Code používa API kľúč (účtovanie cez Console), bez okien 5 hodín/týždeň. Panel tokenov Claude Code ďalej funguje.',
+    ro: 'Această autentificare Claude Code folosește o cheie API (facturare Console), fără ferestre de 5 ore/săptămână. Panoul de tokenuri Claude Code funcționează în continuare.',
+    hu: 'Ez a Claude Code-bejelentkezés API-kulcsot használ (Console-számlázás), 5 órás/heti ablakok nélkül. A Claude Code tokenpanel továbbra is működik.',
+    el: 'Αυτή η σύνδεση Claude Code χρησιμοποιεί κλειδί API (χρέωση Console), χωρίς παράθυρα 5 ωρών/εβδομάδας. Ο πίνακας token του Claude Code συνεχίζει να λειτουργεί.',
+    sv: 'Denna Claude Code-inloggning använder en API-nyckel (Console-fakturering), utan 5-timmars-/veckofönster. Claude Codes tokenpanel fungerar ändå.',
+    da: 'Dette Claude Code-login bruger en API-nøgle (Console-fakturering) uden 5-timers-/ugevinduer. Claude Codes tokenpanel virker stadig.',
+    fi: 'Tämä Claude Code -kirjautuminen käyttää API-avainta (Console-laskutus), jolla ei ole 5 tunnin/viikon ikkunoita. Claude Coden token-paneeli toimii silti.',
+    nb: 'Denne Claude Code-påloggingen bruker en API-nøkkel (Console-fakturering), uten 5-timers-/ukevinduer. Claude Codes token-panel fungerer fortsatt.',
+    tr: 'Bu Claude Code oturumu API anahtarı kullanıyor (Console faturalandırması); 5 saat/hafta pencereleri yok. Claude Code jeton paneli çalışmaya devam ediyor.',
+    ca: 'Aquest inici de sessió del Claude Code fa servir una clau API (facturació per Console), sense finestres de 5 hores/setmana. El tauler de tokens del Claude Code continua funcionant.',
+    bg: 'Този вход в Claude Code използва API ключ (таксуване през Console), без прозорци от 5 часа/седмица. Панелът с токени на Claude Code продължава да работи.',
+    hr: 'Ova prijava u Claude Code koristi API ključ (naplata preko Consolea), bez prozora od 5 sati/tjedan. Panel tokena Claude Codea i dalje radi.',
+    sr: 'Ова пријава у Claude Code користи API кључ (наплата преко Console-а), без прозора од 5 сати/недеља. Панел токена Claude Code-а и даље ради.',
+    lt: 'Šis Claude Code prisijungimas naudoja API raktą (Console apmokestinimas), be 5 val./savaitės langų. Claude Code žetonų skydelis vis tiek veikia.',
+    ja: 'この Claude Code ログインは API キー（Console 課金）を使用しており、5時間/週の使用枠はありません。下の Claude Code トークンパネルは引き続き機能します。',
+    ko: '이 Claude Code 로그인은 API 키(Console 과금)를 사용하며 5시간/주간 창이 없습니다. 아래 Claude Code 토큰 패널은 계속 작동합니다.',
+    zh: '此 Claude Code 登录使用 API 密钥（Console 计费），没有 5 小时/每周用量窗口。下方的 Claude Code 令牌面板仍然可用。',
+    vi: 'Phiên đăng nhập Claude Code này dùng API key (thanh toán qua Console), không có khung 5 giờ/tuần. Bảng token Claude Code bên dưới vẫn hoạt động.',
+    th: 'การเข้าสู่ระบบ Claude Code นี้ใช้ API key (เรียกเก็บผ่าน Console) จึงไม่มีกรอบ 5 ชั่วโมง/สัปดาห์ แผงโทเคน Claude Code ด้านล่างยังใช้งานได้',
+    id: 'Login Claude Code ini memakai API key (penagihan Console), tanpa jendela 5 jam/mingguan. Panel token Claude Code di bawah tetap berfungsi.',
+    ms: 'Log masuk Claude Code ini menggunakan kunci API (pengebilan Console), tanpa tetingkap 5 jam/mingguan. Panel token Claude Code masih berfungsi.',
+    fil: 'Ang Claude Code login na ito ay gumagamit ng API key (Console billing), walang 5-oras/lingguhang window. Gumagana pa rin ang token panel ng Claude Code.',
+    hi: 'यह Claude Code लॉगिन API key (Console बिलिंग) उपयोग करता है, जिसमें 5 घंटे/साप्ताहिक विंडो नहीं होतीं। नीचे का Claude Code टोकन पैनल फिर भी काम करता है।',
+    ar: 'يستخدم تسجيل دخول Claude Code هذا مفتاح API (فوترة Console)، بلا نوافذ 5 ساعات/أسبوعية. لوحة رموز Claude Code أدناه تعمل كالمعتاد.',
+    he: 'התחברות זו ל-Claude Code משתמשת במפתח API (חיוב Console), ללא חלונות של 5 שעות/שבועי. לוח הטוקנים של Claude Code עדיין עובד.',
+    fa: 'این ورود Claude Code از کلید API استفاده می‌کند (صورتحساب Console) و پنجره ۵ ساعته/هفتگی ندارد. پنل توکن Claude Code همچنان کار می‌کند.',
+  };
+  for (const k in NOCRED_HINT) if (DICT[k]) DICT[k].nocred_hint = NOCRED_HINT[k];
+
   // Data source selector (Settings): live endpoint vs Claude Code statusLine.
   const SOURCE = {
     en: 'Data source', es: 'Fuente de datos', pt: 'Fonte de dados', fr: 'Source de données',

@@ -4,6 +4,7 @@ const api = window.claudeCount;
 let latest = null;            // last usage received
 let stale = false;            // last fetch failed -> showing stale data
 let expiredFlag = false;      // failed because the token expired (read-only mode)
+let nocredFlag = false;       // API-key / Console account: no subscription windows exist
 let unavailableFlag = false;  // circuit breaker tripped: the endpoint keeps refusing
 let countdownTimer = null;
 
@@ -200,6 +201,12 @@ function renderStatus(u) {
       el.textContent = t('expired');
       el.title = t('expired_hint');
       el.className = 'status idle';
+    } else if (nocredFlag) {
+      // API-key / Console login: the bars have nothing to show, by design.
+      // Calm status (the token panel below still works), explanation on hover.
+      el.textContent = t('nocred');
+      el.title = t('nocred_hint');
+      el.className = 'status idle';
     } else if (unavailableFlag) {
       // circuit breaker: the endpoint keeps refusing, so polling stopped —
       // say so honestly instead of pretending to be merely offline.
@@ -307,13 +314,15 @@ api.onUsage((u) => {
   latest = u;
   stale = false;
   expiredFlag = false;
+  nocredFlag = false;
   unavailableFlag = false;
   renderAll();
 });
 
-api.onError(({ last, expired, unavailable }) => {
+api.onError(({ last, expired, noCredential, unavailable }) => {
   stale = true;
   expiredFlag = !!expired;
+  nocredFlag = !!noCredential;
   unavailableFlag = !!unavailable;
   if (last) latest = last;
   renderAll();
