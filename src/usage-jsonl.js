@@ -8,18 +8,22 @@ const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
-// US$ per 1M tokens (ref. claude-api 2026-06). read=0.1x in; cache write 5m=1.25x, 1h=2x.
+// US$ per 1M tokens (ref. claude-api 2026-07). read=0.1x in; cache write 5m=1.25x, 1h=2x.
 const PRICE = {
+  fable:  { in: 10, out: 50, read: 1,    w5: 12.5, w1: 20 },
   opus:   { in: 5,  out: 25, read: 0.5,  w5: 6.25, w1: 10 },
   sonnet: { in: 3,  out: 15, read: 0.3,  w5: 3.75, w1: 6 },
   haiku:  { in: 1,  out: 5,  read: 0.1,  w5: 1.25, w1: 2 },
+  other:  { in: 3,  out: 15, read: 0.3,  w5: 3.75, w1: 6 }, // unknown IDs: mid-tier estimate, shown as its own row
 };
 
 function tierOf(model) {
-  if (!model) return 'opus';
-  if (model.includes('sonnet')) return 'sonnet';
-  if (model.includes('haiku')) return 'haiku';
-  return 'opus';
+  const m = String(model || '').toLowerCase();
+  if (m.includes('fable') || m.includes('mythos')) return 'fable';
+  if (m.includes('opus')) return 'opus';
+  if (m.includes('sonnet')) return 'sonnet';
+  if (m.includes('haiku')) return 'haiku';
+  return 'other';
 }
 
 function projectsDir() {
@@ -36,19 +40,23 @@ function emptyAgg() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, byModel: {} };
 }
 
-// Stream one file line by line (don't load it whole) and aggregate today's lines.
-async function aggregateFile(fp, startMs) {
+// Stream one file line by line (don't load it whole). One pass fills two
+// buckets: today's full aggregate and the cost of the 7 days before today
+// (for the daily moving average in the expanded pane).
+async function aggregateFile(fp, todayMs, weekMs) {
   const agg = emptyAgg();
+  let weekCost = 0;
   let rl;
   try { rl = readline.createInterface({ input: fs.createReadStream(fp, 'utf8'), crlfDelay: Infinity }); }
-  catch (_) { return agg; }
+  catch (_) { return { agg, weekCost }; }
   for await (const ln of rl) {
     if (ln.length < 40 || ln.indexOf('"usage"') < 0 || ln.indexOf('"assistant"') < 0) continue;
     let j;
     try { j = JSON.parse(ln); } catch (_) { continue; }
     const msg = j && j.message;
     if (j.type !== 'assistant' || !msg || !msg.usage || !j.timestamp) continue;
-    if (new Date(j.timestamp).getTime() < startMs) continue;
+    const ts = new Date(j.timestamp).getTime();
+    if (ts < weekMs) continue;
 
     const u = msg.usage;
     const p = PRICE[tierOf(msg.model)];
@@ -61,26 +69,30 @@ async function aggregateFile(fp, startMs) {
     const w5 = cc.ephemeral_5m_input_tokens != null ? cc.ephemeral_5m_input_tokens : Math.max(0, cwTot - w1);
     const lineCost = (inp * p.in + out * p.out + cr * p.read + w1 * p.w1 + w5 * p.w5) / 1e6;
 
+    if (ts < todayMs) { weekCost += lineCost; continue; }
+
     const t = tierOf(msg.model);
     const m = agg.byModel[t] || (agg.byModel[t] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
     m.input += inp; m.output += out; m.cacheRead += cr; m.cacheWrite += cwTot; m.cost += lineCost;
     agg.input += inp; agg.output += out; agg.cacheRead += cr; agg.cacheWrite += cwTot; agg.cost += lineCost;
   }
-  return agg;
+  return { agg, weekCost };
 }
 
 async function todayUsage() {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   const startMs = start.getTime();
-  if (startMs !== cacheDay) { fileCache.clear(); cacheDay = startMs; } // new day: drop the cache
+  const weekMs = startMs - 7 * 24 * 60 * 60 * 1000; // the 7 complete days before today
+  if (startMs !== cacheDay) { fileCache.clear(); cacheDay = startMs; } // new day: drop the cache (windows moved)
   const root = projectsDir();
 
   let dirs;
   try { dirs = await fs.promises.readdir(root, { withFileTypes: true }); }
   catch (_) { return null; }
 
-  // only files touched today (trims the scan)
+  // only files touched within the week window (trims the scan; a file whose
+  // last append predates the window has no lines inside it)
   const files = [];
   for (const d of dirs) {
     if (!d.isDirectory()) continue;
@@ -90,7 +102,7 @@ async function todayUsage() {
     for (const f of ents) {
       if (!f.endsWith('.jsonl')) continue;
       const fp = path.join(pd, f);
-      try { const st = await fs.promises.stat(fp); if (st.mtimeMs >= startMs) files.push({ fp, size: st.size, mtimeMs: st.mtimeMs }); }
+      try { const st = await fs.promises.stat(fp); if (st.mtimeMs >= weekMs) files.push({ fp, size: st.size, mtimeMs: st.mtimeMs }); }
       catch (_) {}
     }
   }
@@ -99,15 +111,18 @@ async function todayUsage() {
   const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const byModel = {};
   let cost = 0;
+  let weekCost = 0;
 
   for (const { fp, size, mtimeMs } of files) {
     seen.add(fp);
     let entry = fileCache.get(fp);
     if (!entry || entry.size !== size || entry.mtimeMs !== mtimeMs) {
-      entry = { size, mtimeMs, agg: await aggregateFile(fp, startMs) };  // re-read only changed files
+      const r = await aggregateFile(fp, startMs, weekMs); // re-read only changed files
+      entry = { size, mtimeMs, agg: r.agg, weekCost: r.weekCost };
       fileCache.set(fp, entry);
     }
     const a = entry.agg;
+    weekCost += entry.weekCost;
     totals.input += a.input; totals.output += a.output; totals.cacheRead += a.cacheRead; totals.cacheWrite += a.cacheWrite;
     cost += a.cost;
     for (const [t, v] of Object.entries(a.byModel)) {
@@ -118,7 +133,7 @@ async function todayUsage() {
 
   for (const k of fileCache.keys()) if (!seen.has(k)) fileCache.delete(k); // prune gone files
 
-  return { at: Date.now(), totals, cost, byModel };
+  return { at: Date.now(), totals, cost, byModel, week: { cost: weekCost, avgPerDay: weekCost / 7 } };
 }
 
 module.exports = { todayUsage };

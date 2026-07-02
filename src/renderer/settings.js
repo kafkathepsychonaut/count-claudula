@@ -58,6 +58,15 @@ async function init() {
   applyTheme(s.theme);
   buildThemeOptions(s.theme || 'classic');
   document.getElementById('start').checked = s.startWithOS !== false;
+
+  const srcSel = document.getElementById('source');
+  const srcHint = document.getElementById('source-hint');
+  const srcCmd = document.getElementById('source-cmd');
+  srcSel.value = s.source === 'statusline' ? 'statusline' : 'endpoint';
+  srcCmd.value = data.statuslineCmd || '';
+  const syncSourceHint = () => { srcHint.style.display = srcSel.value === 'statusline' ? '' : 'none'; };
+  syncSourceHint();
+
   applyLabels();
 
   document.getElementById('lang').addEventListener('change', (e) => {
@@ -69,6 +78,20 @@ async function init() {
   });
   document.getElementById('start').addEventListener('change', (e) => {
     api.settingsSet('startWithOS', e.target.checked);
+  });
+  srcSel.addEventListener('change', (e) => {
+    api.settingsSet('source', e.target.value);
+    syncSourceHint();
+  });
+  // click = select + copy (the command is long; make grabbing it painless)
+  srcCmd.addEventListener('click', async () => {
+    srcCmd.select();
+    try {
+      await navigator.clipboard.writeText(srcCmd.value);
+      const c = document.getElementById('source-copied');
+      c.textContent = '✓';
+      setTimeout(() => { c.textContent = ''; }, 1500);
+    } catch (_) { /* text is selected; Ctrl+C still works */ }
   });
   document.getElementById('btn-close').addEventListener('click', () => api.settingsClose());
   document.getElementById('btn-donate').addEventListener('click', () => api.donate());

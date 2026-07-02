@@ -24,6 +24,10 @@ Requires Claude Code installed and logged in. The binaries are unsigned (see
 - **Detailed mode**: today's Claude Code tokens (input / output / cache), their
   equivalent **API value** (what that usage would cost on the API — already
   included in your Max plan, not an extra charge), and a per-model split
+  (Fable / Opus / Sonnet / Haiku)
+- **"More details" pane** (arrow inside detailed mode): per-model **weekly caps**
+  (e.g. the separate Fable limit) as mini bars, plus your **7-day cost** and
+  **daily average**
 - **37 languages**, auto-detecting your OS language (right-to-left included)
 - **3 themes** — *Classic* (light), *Bloodthirsty* (dark, blood-red) and *Zombie*
   (dark, toxic-green) — switch in Settings
@@ -64,6 +68,18 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
 > refusing requests the widget **stops polling entirely** instead of hammering it
 > (a manual ↻ re-arms it). Still: **you use it at your own risk** — read the Terms
 > and decide for yourself.
+
+### Prefer zero endpoint? Use the statusLine source
+
+Settings → **Data source → Claude Code statusLine** switches the 5h/weekly bars
+to the data Claude Code itself pipes into its
+[statusLine](https://code.claude.com/docs/en/statusline) — a sanctioned channel,
+**no credential read, no endpoint call at all**. The widget writes a tiny capture
+script and shows you the exact command to set as `statusLine` in Claude Code's
+`settings.json`; the script also prints a usable status line (model + 5h/7d %).
+Trade-off: the numbers only refresh **while a Claude Code session is running**,
+and they don't include usage from the web/desktop apps — which is why the live
+endpoint remains the default.
 
 ## 🔍 Don't trust — audit, or build it yourself
 

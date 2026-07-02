@@ -49,6 +49,27 @@ function normalizeWindow(w) {
   return { utilization: Math.round(w.utilization), resetsAt: w.resets_at || null };
 }
 
+// Scoped/extra limits beyond the two headline bars. The endpoint's `limits`
+// array carries one entry per active limit — including per-model weekly caps
+// (e.g. a "Fable" weekly limit) that exist nowhere else in the response.
+function normalizeLimits(d) {
+  if (!Array.isArray(d.limits)) return [];
+  const out = [];
+  for (const l of d.limits) {
+    if (!l || typeof l.percent !== 'number') continue;
+    out.push({
+      kind: String(l.kind || ''),
+      group: String(l.group || ''),
+      percent: Math.round(l.percent),
+      severity: String(l.severity || 'normal'),
+      resetsAt: l.resets_at || null,
+      // per-model caps carry the model's display name; others have no scope
+      label: (l.scope && l.scope.model && l.scope.model.display_name) ? String(l.scope.model.display_name) : null,
+    });
+  }
+  return out;
+}
+
 // Paid overage (billed for usage beyond the plan). Comes in spend + extra_usage.
 function normalizeOverage(d) {
   const s = d.spend || {};
@@ -106,6 +127,7 @@ async function fetchUsage() {
     sevenDay: normalizeWindow(d.seven_day),
     sevenDayOpus: normalizeWindow(d.seven_day_opus),
     sevenDaySonnet: normalizeWindow(d.seven_day_sonnet),
+    limits: normalizeLimits(d),
     overage: normalizeOverage(d),
   };
 }

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { fetchUsage, credPath } = require('./usage');
 const { todayUsage } = require('./usage-jsonl');
+const { readStatusline, ensureCaptureScript, captureCommand } = require('./usage-statusline');
 const { makeTrayIcon } = require('./icon');
 const i18n = require('./renderer/i18n');
 const { autoUpdater } = require('electron-updater');
@@ -11,7 +12,12 @@ const { autoUpdater } = require('electron-updater');
 // ---- Config ----
 const WIN_W = 268;
 const H_SIMPLE = 218;     // simple mode (2 bars)
-const H_EXTENDED = 408;   // extended mode (+ Claude Code tokens)
+// Extended mode is content-driven: the renderer measures its content (limit
+// rows, per-model rows and label lengths all vary) and reports the height over
+// IPC. These are only the fallbacks used before the first report arrives.
+const H_EXTENDED = 380;   // fallback: fine-detail pane closed
+const H_EXT_MORE = 600;   // fallback: fine-detail pane open
+const H_EXT_MAX = 760;    // sanity cap for renderer-reported heights
 const H_COLLAPSED = 60;
 const POLL_ACTIVE_MS = 180 * 1000;  // 3 min — the data changes slowly; gentle on the endpoint's rate limit
 const POLL_ERROR_MS = 90 * 1000;    // 90s for NETWORK error (429 uses its own exponential backoff)
@@ -37,6 +43,8 @@ let pollTimer = null;
 let paused = false;          // screen locked / suspended
 let collapsed = false;
 let mode = 'simple';         // 'simple' | 'extended'
+let extMore = false;         // extended mode: fine-detail pane open (arrow toggle)
+let extHeight = 0;           // renderer-measured content height for extended mode
 let lastGood = null;         // last usage that succeeded (to show stale)
 let lastTokens = null;       // last aggregate of Claude Code tokens
 let settingsWin = null;
@@ -98,6 +106,8 @@ function getSettings() {
     language: s.language || 'auto',
     startWithOS: s.startWithOS === true, // off by default: it reads a credential + hits Anthropic at boot
     theme: (s.theme === 'bloodthirsty' || s.theme === 'zombie') ? s.theme : 'classic',
+    // 'endpoint' (live, all surfaces) | 'statusline' (Claude Code only, no endpoint)
+    source: s.source === 'statusline' ? 'statusline' : 'endpoint',
   };
 }
 function setSetting(key, val) {
@@ -112,6 +122,7 @@ function validSetting(k, v) {
   if (k === 'startWithOS') return typeof v === 'boolean';
   if (k === 'theme') return ALLOWED_THEMES.includes(v);
   if (k === 'language') return v === 'auto' || (typeof v === 'string' && i18n.LANGS.some((l) => l.code === v));
+  if (k === 'source') return v === 'endpoint' || v === 'statusline';
   return false;
 }
 function effectiveLocale() {
@@ -129,6 +140,7 @@ function createWindow() {
   const st = loadState();
   collapsed = !!st.collapsed;
   mode = st.mode === 'extended' ? 'extended' : 'simple';
+  extMore = !!st.extMore;
   const pos = (Number.isFinite(st.x) && Number.isFinite(st.y)) ? clampPosition(st.x, st.y) : defaultPosition();
 
   win = new BrowserWindow({
@@ -162,7 +174,7 @@ function createWindow() {
 
   win.once('ready-to-show', () => {
     win.show();
-    win.webContents.send('ui:init', { collapsed, mode, locale: effectiveLocale(), theme: getSettings().theme });
+    win.webContents.send('ui:init', { collapsed, mode, extMore, locale: effectiveLocale(), theme: getSettings().theme });
     if (lastGood) win.webContents.send('usage:update', lastGood);
     if (lastTokens) win.webContents.send('tokens:update', lastTokens);
   });
@@ -182,7 +194,8 @@ function createWindow() {
 
 function targetHeight() {
   if (collapsed) return H_COLLAPSED;
-  return mode === 'extended' ? H_EXTENDED : H_SIMPLE;
+  if (mode !== 'extended') return H_SIMPLE;
+  return extHeight || (extMore ? H_EXT_MORE : H_EXTENDED);
 }
 
 function applyBounds() {
@@ -202,6 +215,22 @@ function setMode(next) {
   saveState({ mode });
   applyBounds();
   if (mode === 'extended') pollNow(); // fetch tokens now
+}
+
+function setExtMore(next) {
+  extMore = !!next;
+  extHeight = 0; // stale for the new pane state; the renderer re-reports right after
+  saveState({ extMore });
+  applyBounds();
+}
+
+// The renderer measured its extended-mode content (see reportHeight() there).
+function setExtHeight(h) {
+  if (typeof h !== 'number' || !Number.isFinite(h)) return;
+  const next = Math.max(H_SIMPLE, Math.min(H_EXT_MAX, Math.round(h)));
+  if (Math.abs(next - (extHeight || 0)) < 3) return; // ignore sub-pixel jitter
+  extHeight = next;
+  if (mode === 'extended' && !collapsed) applyBounds();
 }
 
 // ---- Poller ----
@@ -226,6 +255,24 @@ async function poll() {
         const tk = await todayUsage();
         if (tk) { lastTokens = tk; if (win) win.webContents.send('tokens:update', tk); }
       } catch (_) { /* don't break the cycle */ }
+    }
+    if (getSettings().source === 'statusline') {
+      // statusLine source: 100% local (capture file written by Claude Code's
+      // statusLine hook). No network, so no breaker/backoff concerns.
+      try {
+        const usage = readStatusline(app.getPath('userData'));
+        lastGood = usage;
+        if (win) win.webContents.send('usage:update', usage);
+        updateTrayTitle(usage);
+      } catch (err) {
+        if (win) {
+          win.webContents.send('usage:error', {
+            message: err.message, expired: !!err.expired, at: Date.now(), last: lastGood,
+          });
+        }
+      }
+      scheduleNext(POLL_ACTIVE_MS);
+      return;
     }
     if (!allowNetwork) {
       // Breaker is tripped and nothing re-armed it: local-only tick. Extended
@@ -296,10 +343,12 @@ function pollNow() {
 // the file, so this can't feed back on itself.
 let credWatcher = null;
 let credWatchDebounce = null;
+let credWatchRetry = null;
 function watchCredentials() {
   let dir, file;
   try { const p = credPath(); dir = path.dirname(p); file = path.basename(p); }
   catch (_) { return; }
+  clearTimeout(credWatchRetry);
   try {
     credWatcher = fs.watch(dir, (_evt, fname) => {
       if (fname && fname !== file) return; // ignore other files in ~/.claude
@@ -307,8 +356,41 @@ function watchCredentials() {
       // small debounce: the rename-replace fires several events; let it settle
       credWatchDebounce = setTimeout(() => { if (!paused) pollNow(); }, 400);
     });
-    credWatcher.on('error', () => { try { credWatcher.close(); } catch (_) {} credWatcher = null; });
-  } catch (_) { /* dir missing/unwatchable: timed polling still covers recovery */ }
+    credWatcher.on('error', () => { try { credWatcher.close(); } catch (_) {} credWatcher = null; scheduleWatchRetry(); });
+  } catch (_) {
+    // dir missing/unwatchable (e.g. installed before Claude Code's first run):
+    // timed polling still covers recovery; keep retrying so instant refresh
+    // detection comes back once ~/.claude exists.
+    scheduleWatchRetry();
+  }
+}
+function scheduleWatchRetry() {
+  clearTimeout(credWatchRetry);
+  credWatchRetry = setTimeout(watchCredentials, 5 * 60 * 1000);
+}
+
+// ---- statusLine capture watcher ----
+// With the statusline source active, watch the capture file so the widget
+// refreshes the moment Claude Code updates its status line (polling still
+// covers if watching fails). userData always exists, so no retry dance here.
+let slWatcher = null;
+let slDebounce = null;
+function watchStatusline() {
+  unwatchStatusline();
+  if (getSettings().source !== 'statusline') return;
+  try {
+    slWatcher = fs.watch(app.getPath('userData'), (_evt, fname) => {
+      if (fname && fname !== 'statusline.json') return;
+      clearTimeout(slDebounce);
+      slDebounce = setTimeout(() => { if (!paused) pollNow(); }, 400);
+    });
+    slWatcher.on('error', () => { unwatchStatusline(); });
+  } catch (_) { /* timed polling still covers */ }
+}
+function unwatchStatusline() {
+  clearTimeout(slDebounce);
+  try { if (slWatcher) slWatcher.close(); } catch (_) {}
+  slWatcher = null;
 }
 
 // ---- Tray ----
@@ -390,7 +472,7 @@ function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
     width: 344,
-    height: 470,
+    height: 560,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -435,6 +517,8 @@ function wirePowerEvents() {
 ipcMain.on('ui:refresh', pollNow);
 ipcMain.on('ui:collapse', (_e, next) => setCollapsed(!!next));
 ipcMain.on('ui:mode', (_e, m) => setMode(m));
+ipcMain.on('ui:extmore', (_e, v) => setExtMore(!!v));
+ipcMain.on('ui:height', (_e, h) => setExtHeight(h));
 ipcMain.on('ui:settings', openSettings);
 ipcMain.on('ui:donate', () => shell.openExternal(DONATE_URL));
 ipcMain.on('ui:hide', () => { if (win) win.hide(); });
@@ -444,6 +528,7 @@ ipcMain.handle('settings:get', () => ({
   settings: getSettings(),
   langs: i18n.LANGS,
   locale: effectiveLocale(),
+  statuslineCmd: captureCommand(app.getPath('userData')),
 }));
 ipcMain.on('settings:set', (_e, payload) => {
   const { k, v } = payload || {}; // tolerate a malformed/empty payload
@@ -461,12 +546,19 @@ ipcMain.on('settings:set', (_e, payload) => {
     if (win) win.webContents.send('ui:theme', th);
     if (settingsWin) settingsWin.webContents.send('ui:theme', th);
   }
+  if (k === 'source') {
+    if (v === 'statusline') ensureCaptureScript(app.getPath('userData'));
+    watchStatusline(); // attaches or detaches per the new source
+    pollNow();
+  }
 });
 ipcMain.on('settings:close', () => { if (settingsWin) settingsWin.close(); });
 
 ipcMain.handle('feedback:send', async (_e, text) => {
   const meta = `\n\n— Count Claudula v${app.getVersion()} · ${process.platform} · ${effectiveLocale()}`;
-  const body = String(text || '').slice(0, 5000) + meta;
+  // mailto: URLs have a practical length ceiling in several clients/OSes
+  // (~2000 chars); a longer body can make the email silently fail to open.
+  const body = String(text || '').slice(0, 1800) + meta;
   const subject = encodeURIComponent('Count Claudula — feedback');
   await shell.openExternal(`mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${encodeURIComponent(body)}`);
   return { ok: true, method: 'mailto' };
@@ -485,9 +577,19 @@ if (!gotLock) {
     buildTray();
     wirePowerEvents();
     applyStartup();
+    if (getSettings().source === 'statusline') ensureCaptureScript(app.getPath('userData'));
     pollNow();
     watchCredentials();
+    watchStatusline();
     setupUpdater();
+  });
+  app.on('before-quit', () => {
+    quitting = true;
+    clearTimeout(pollTimer);
+    clearTimeout(credWatchDebounce);
+    clearTimeout(credWatchRetry);
+    try { if (credWatcher) credWatcher.close(); } catch (_) {}
+    unwatchStatusline();
   });
   app.on('window-all-closed', (e) => { /* stays alive in the tray */ });
   app.on('activate', () => { if (!win) createWindow(); else win.show(); });
