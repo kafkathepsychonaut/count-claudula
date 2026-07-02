@@ -50,7 +50,9 @@ let lastTokens = null;       // last aggregate of Claude Code tokens
 let settingsWin = null;
 let updateAvailable = false; // a newer release exists (metadata only, nothing downloaded)
 let updateDownloading = false;
-let updateReady = false;     // downloaded; "update & restart" shows in the tray
+let updateReady = false;     // downloaded; "update & restart" shows in tray + widget banner
+let updateVersion = '';      // version string of the offered update
+let updateProgress = 0;      // download % for the widget banner
 let rlBackoff = 0;           // growing backoff when the endpoint returns 429
 let rejected4xx = 0;         // consecutive server 4xx (non-429) — trips the breaker
 let breakerRetry = false;    // pollNow() sets it: allow one network attempt while tripped
@@ -177,6 +179,7 @@ function createWindow() {
     win.webContents.send('ui:init', { collapsed, mode, extMore, locale: effectiveLocale(), theme: getSettings().theme });
     if (lastGood) win.webContents.send('usage:update', lastGood);
     if (lastTokens) win.webContents.send('tokens:update', lastTokens);
+    win.webContents.send('update:state', updateUiState());
   });
 
   // Persist position when dragged.
@@ -194,8 +197,9 @@ function createWindow() {
 
 function targetHeight() {
   if (collapsed) return H_COLLAPSED;
+  if (extHeight) return extHeight; // renderer-measured (covers the update banner too)
   if (mode !== 'extended') return H_SIMPLE;
-  return extHeight || (extMore ? H_EXT_MORE : H_EXTENDED);
+  return extMore ? H_EXT_MORE : H_EXTENDED;
 }
 
 function applyBounds() {
@@ -212,6 +216,7 @@ function setCollapsed(next) {
 
 function setMode(next) {
   mode = next === 'extended' ? 'extended' : 'simple';
+  extHeight = 0; // stale for the new mode; the renderer re-reports right after
   saveState({ mode });
   applyBounds();
   if (mode === 'extended') pollNow(); // fetch tokens now
@@ -224,13 +229,13 @@ function setExtMore(next) {
   applyBounds();
 }
 
-// The renderer measured its extended-mode content (see reportHeight() there).
+// The renderer measured its content height (see reportHeight() there).
 function setExtHeight(h) {
   if (typeof h !== 'number' || !Number.isFinite(h)) return;
-  const next = Math.max(H_SIMPLE, Math.min(H_EXT_MAX, Math.round(h)));
+  const next = Math.max(120, Math.min(H_EXT_MAX, Math.round(h)));
   if (Math.abs(next - (extHeight || 0)) < 3) return; // ignore sub-pixel jitter
   extHeight = next;
-  if (mode === 'extended' && !collapsed) applyBounds();
+  if (!collapsed) applyBounds();
 }
 
 // ---- Poller ----
@@ -412,22 +417,39 @@ function rebuildTrayMenu() {
     { label: i18n.t(L, 'set_donate'), click: () => shell.openExternal(DONATE_URL) },
   ];
   if (updateReady) {
-    items.push({ type: 'separator' }, {
-      label: i18n.t(L, 'update_restart'),
-      click: () => { quitting = true; autoUpdater.quitAndInstall(); },
-    });
+    items.push({ type: 'separator' }, { label: i18n.t(L, 'update_restart'), click: installUpdate });
   } else if (updateAvailable && !updateDownloading) {
-    items.push({ type: 'separator' }, {
-      label: i18n.t(L, 'update_download'),
-      click: () => {
-        updateDownloading = true;
-        rebuildTrayMenu();
-        autoUpdater.downloadUpdate().catch(() => { updateDownloading = false; rebuildTrayMenu(); });
-      },
-    });
+    items.push({ type: 'separator' }, { label: i18n.t(L, 'update_download'), click: startUpdateDownload });
   }
   items.push({ type: 'separator' }, { label: i18n.t(L, 'tray_quit'), click: () => { quitting = true; app.quit(); } });
   tray.setContextMenu(Menu.buildFromTemplate(items));
+}
+
+// ---- Update UI (tray + in-widget banner) ----
+function updateUiState() {
+  if (updateReady) return { state: 'ready', version: updateVersion };
+  if (updateDownloading) return { state: 'downloading', version: updateVersion, percent: updateProgress };
+  if (updateAvailable) return { state: 'available', version: updateVersion };
+  return { state: 'none' };
+}
+// Keep both surfaces in sync. Download progress skips the tray rebuild —
+// progress events fire often and only the banner shows a percentage.
+function syncUpdateUi(progressOnly) {
+  if (!progressOnly) rebuildTrayMenu();
+  if (win) win.webContents.send('update:state', updateUiState());
+}
+function startUpdateDownload() {
+  if (!updateAvailable || updateDownloading || updateReady) return;
+  updateDownloading = true;
+  updateProgress = 0;
+  syncUpdateUi();
+  autoUpdater.downloadUpdate().catch(() => { updateDownloading = false; syncUpdateUi(); });
+}
+function installUpdate() {
+  if (!updateReady) return;
+  quitting = true;
+  // silent NSIS run + relaunch: updating never reopens the install wizard
+  autoUpdater.quitAndInstall(true, true);
 }
 
 // Update via GitHub releases (packaged app only; NSIS — the portable doesn't update).
@@ -441,15 +463,23 @@ function setupUpdater() {
   // tray ("Download update") and the install happens on restart/quit.
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('update-available', () => { updateAvailable = true; rebuildTrayMenu(); });
+  autoUpdater.on('update-available', (info) => {
+    updateAvailable = true;
+    updateVersion = (info && info.version) || '';
+    syncUpdateUi();
+  });
   // e.g. a yanked release: stop offering a download that would just fail
   autoUpdater.on('update-not-available', () => {
-    if (updateAvailable) { updateAvailable = false; rebuildTrayMenu(); }
+    if (updateAvailable) { updateAvailable = false; updateVersion = ''; syncUpdateUi(); }
   });
-  autoUpdater.on('update-downloaded', () => { updateDownloading = false; updateReady = true; rebuildTrayMenu(); });
+  autoUpdater.on('download-progress', (p) => {
+    updateProgress = Math.round((p && p.percent) || 0);
+    syncUpdateUi(true);
+  });
+  autoUpdater.on('update-downloaded', () => { updateDownloading = false; updateReady = true; syncUpdateUi(); });
   autoUpdater.on('error', () => {
     // offline / no release / failed download: stay silent, re-offer the item
-    if (updateDownloading) { updateDownloading = false; rebuildTrayMenu(); }
+    if (updateDownloading) { updateDownloading = false; syncUpdateUi(); }
   });
   const check = () => {
     // Don't disturb an in-flight download or a downloaded-and-waiting update:
@@ -519,6 +549,8 @@ ipcMain.on('ui:collapse', (_e, next) => setCollapsed(!!next));
 ipcMain.on('ui:mode', (_e, m) => setMode(m));
 ipcMain.on('ui:extmore', (_e, v) => setExtMore(!!v));
 ipcMain.on('ui:height', (_e, h) => setExtHeight(h));
+ipcMain.on('ui:update-download', startUpdateDownload);
+ipcMain.on('ui:update-restart', installUpdate);
 ipcMain.on('ui:settings', openSettings);
 ipcMain.on('ui:donate', () => shell.openExternal(DONATE_URL));
 ipcMain.on('ui:hide', () => { if (win) win.hide(); });

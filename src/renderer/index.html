@@ -90,6 +90,15 @@
       border-radius: 6px; padding: 2px 4px; width: fit-content;
     }
     .ext-toggle:hover { background: var(--hover); color: var(--ink); }
+    .upd {
+      display: none; align-items: center; gap: 6px; margin: 0 13px 7px;
+      padding: 4px 9px; border-radius: 8px; font-size: 10.5px; font-weight: 600;
+      color: var(--coral); background: var(--hover); border: 1px solid var(--line);
+      cursor: pointer; -webkit-app-region: no-drag;
+    }
+    .upd:hover { border-color: var(--coral); }
+    .upd .upd-ico { font-size: 11px; }
+    body.has-upd:not(.collapsed) .upd { display: flex; }
     .ext-toggle .chev { display: inline-block; transition: transform 0.15s ease; font-size: 9px; }
     body.ext-more .ext-toggle .chev { transform: rotate(180deg); }
     #ext-more { display: none; flex-direction: column; }
@@ -132,6 +141,10 @@
         <button id="btn-collapse" class="icon-btn" data-i18n-title="t_minimize" title="minimize" aria-label="minimize">&#x2212;</button>
         <button id="btn-hide" class="icon-btn" data-i18n-title="t_hide" title="hide to tray" aria-label="hide to tray">&#x2913;</button>
       </div>
+    </div>
+
+    <div id="upd" class="upd" role="button">
+      <span class="upd-ico">&#x2b73;</span><span id="upd-label"></span>
     </div>
 
     <div id="body" class="body">

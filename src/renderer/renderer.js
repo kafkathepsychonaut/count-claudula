@@ -20,6 +20,7 @@ const LEVEL_COLOR = { ok: '#D97757', warn: '#C2562F', crit: '#9B3415' };
 let mode = 'simple';
 let extMore = false;          // fine-detail pane inside extended mode
 let lastTk = null;            // last tokens payload (re-render on language switch)
+let updState = null;          // update banner: {state: available|downloading|ready, version, percent}
 let LOCALE = 'en';
 function applyTheme(theme) {
   const t = (theme === 'bloodthirsty' || theme === 'zombie') ? theme : 'classic';
@@ -34,6 +35,7 @@ function applyI18n(loc) {
   document.querySelectorAll('[data-i18n-title]').forEach((el) => { el.title = t(el.getAttribute('data-i18n-title')); });
   applyMode(mode);          // re-translate the mode button title
   applyExtMore(extMore);    // re-translate the more/less toggle
+  renderUpdate();           // re-translate the update banner
   if (latest) renderAll();  // re-translate dynamic status/reset
   if (lastTk) renderTokens(lastTk); // re-translate the "other" tier row
   reportHeight();           // label lengths differ per language
@@ -59,15 +61,27 @@ function applyExtMore(v) {
   $('ext-more-label').textContent = t(extMore ? 't_less' : 't_more');
 }
 
-// Content-driven window height: the extended pane's content varies (number of
-// scoped limits, per-model rows, language), so the renderer measures it and
-// asks main to resize. Fixed heights clipped content — and a clipped toggle
-// can't be clicked to un-clip itself.
+// In-widget update banner (the tray mirrors it): available -> click downloads;
+// downloading -> shows %; ready -> click restarts into the new version.
+function renderUpdate() {
+  document.body.classList.toggle('has-upd', !!updState);
+  if (!updState) return;
+  let label;
+  if (updState.state === 'ready') label = t('update_restart');
+  else if (updState.state === 'downloading') label = t('updating') + (updState.percent ? ' ' + updState.percent + '%' : '');
+  else label = t('update_download') + (updState.version ? ' · v' + updState.version : '');
+  $('upd-label').textContent = label;
+}
+
+// Content-driven window height: the visible content varies (update banner,
+// number of scoped limits, per-model rows, language), so the renderer measures
+// it and asks main to resize. Fixed heights clipped content — and a clipped
+// toggle can't be clicked to un-clip itself.
 let heightRaf = 0;
 function reportHeight() {
   cancelAnimationFrame(heightRaf);
   heightRaf = requestAnimationFrame(() => {
-    if (mode !== 'extended' || document.body.classList.contains('collapsed')) return;
+    if (document.body.classList.contains('collapsed')) return;
     const card = $('card');
     card.style.height = 'auto';          // let it take its natural content height
     const h = card.offsetHeight + 22;    // + body padding (11px each side)
@@ -244,6 +258,12 @@ api.onInit(({ collapsed, mode, extMore, locale, theme }) => {
 api.onLocale((loc) => applyI18n(loc));
 api.onTheme((th) => applyTheme(th));
 
+api.onUpdate((u) => {
+  updState = (u && u.state && u.state !== 'none') ? u : null;
+  renderUpdate();
+  reportHeight();
+});
+
 function renderTokens(tk) {
   const tt = tk.totals || {};
   $('tok-in').textContent = fmtTok(tt.input);
@@ -299,6 +319,11 @@ $('btn-refresh').addEventListener('click', () => {
   api.refresh();
 });
 $('btn-hide').addEventListener('click', () => api.hide());
+$('upd').addEventListener('click', () => {
+  if (!updState) return;
+  if (updState.state === 'ready') api.updateRestart();
+  else if (updState.state === 'available') api.updateDownload();
+});
 $('btn-settings').addEventListener('click', () => api.openSettings());
 $('btn-mode').addEventListener('click', () => {
   applyMode(mode === 'extended' ? 'simple' : 'extended');
