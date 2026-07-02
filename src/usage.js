@@ -26,10 +26,24 @@ function credPath() {
 }
 
 function readToken() {
-  const raw = fs.readFileSync(credPath(), 'utf8');
-  const o = JSON.parse(raw).claudeAiOauth;
+  let raw;
+  try {
+    raw = fs.readFileSync(credPath(), 'utf8');
+  } catch (_) {
+    // no credential file yet (Claude Code not installed / never logged in):
+    // "open Claude Code" is the fix, same as an expired token. The dir watcher
+    // re-polls the instant the file appears.
+    const e = new Error('no credential file'); e.expired = true; throw e;
+  }
+  let o = null;
+  try { o = JSON.parse(raw).claudeAiOauth; } catch (_) { /* fall through */ }
   if (!o || !o.accessToken) {
-    throw new Error('credencial OAuth do Claude nao encontrada (claudeAiOauth ausente)');
+    // The file exists but holds no subscription OAuth — an API-key / Console
+    // account. Those have no 5h/weekly windows AT ALL, so this is a steady
+    // state, not an outage: the UI says so and the token panel keeps working.
+    const e = new Error('no subscription credential (API key / Console account)');
+    e.noCredential = true;
+    throw e;
   }
   const expired = !(o.expiresAt && o.expiresAt - Date.now() > EXPIRY_SKEW_MS);
   return { token: o.accessToken, expired };
