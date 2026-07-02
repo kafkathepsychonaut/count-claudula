@@ -15,12 +15,19 @@ const H_EXTENDED = 408;   // extended mode (+ Claude Code tokens)
 const H_COLLAPSED = 60;
 const POLL_ACTIVE_MS = 180 * 1000;  // 3 min — the data changes slowly; gentle on the endpoint's rate limit
 const POLL_ERROR_MS = 90 * 1000;    // 90s for NETWORK error (429 uses its own exponential backoff)
+// Circuit breaker: this many consecutive server 4xx rejections (other than 429)
+// and we stop hitting the endpoint instead of hammering one that said no — if
+// Anthropic ever closes or changes it, the widget must go quiet, not loud.
+// A manual refresh, a credential rewrite by Claude Code, or unlock/resume allows
+// ONE new attempt; a 429/529 means the endpoint is alive (just throttling), so
+// it fully re-arms the breaker. While tripped, extended mode keeps ticking
+// locally (JSONL) without touching the network.
+const BREAKER_TRIP = 3;
 const STATE_FILE = path.join(app.getPath('userData'), 'state.json');
 
-// Feedback. Empty FEEDBACK_ENDPOINT => opens the user's email (mailto).
-// Set a URL (Formspree/serverless) for silent in-app sending, with no embedded secret.
+// Feedback opens the user's own email client (mailto) — the app never sends
+// anything on its own.
 const FEEDBACK_EMAIL = 'kafkathepsychonaut@gmail.com';
-const FEEDBACK_ENDPOINT = '';
 const DONATE_URL = 'https://ko-fi.com/kafkathepsychonaut';
 const THEME_BG = { classic: '#F4F1EA', bloodthirsty: '#1B1113', zombie: '#141017' };
 
@@ -33,13 +40,30 @@ let mode = 'simple';         // 'simple' | 'extended'
 let lastGood = null;         // last usage that succeeded (to show stale)
 let lastTokens = null;       // last aggregate of Claude Code tokens
 let settingsWin = null;
-let updateReady = false;
+let updateAvailable = false; // a newer release exists (metadata only, nothing downloaded)
+let updateDownloading = false;
+let updateReady = false;     // downloaded; "update & restart" shows in the tray
 let rlBackoff = 0;           // growing backoff when the endpoint returns 429
+let rejected4xx = 0;         // consecutive server 4xx (non-429) — trips the breaker
+let breakerRetry = false;    // pollNow() sets it: allow one network attempt while tripped
 let polling = false;         // a poll is in flight (avoid overlapping requests)
 let pollQueued = false;      // a refresh arrived mid-poll; run once more after
 let quitting = false;
 
 // ---- Position/state persistence ----
+// v1.0.1 had no top-level productName, so Electron derived the userData dir
+// from the old package name ("claude-count"). Carry state.json over once so
+// updating doesn't reset position/theme/language/start-with-OS.
+function migrateLegacyState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) return; // already migrated or fresh state exists
+    const legacy = path.join(app.getPath('appData'), 'claude-count', 'state.json');
+    if (!fs.existsSync(legacy)) return;
+    fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
+    fs.copyFileSync(legacy, STATE_FILE);
+  } catch (_) { /* fresh defaults are an acceptable fallback */ }
+}
+
 function loadState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (_) { return {}; }
 }
@@ -191,28 +215,62 @@ async function poll() {
   if (paused || polling) { if (polling) pollQueued = true; return; } // one request at a time
   polling = true;
   pollQueued = false;
+  const allowNetwork = rejected4xx < BREAKER_TRIP || breakerRetry;
+  breakerRetry = false; // a re-arm is good for exactly one attempt
   try {
     // Claude Code tokens: LOCAL data (JSONL). Runs independently of the network,
-    // so it doesn't disappear when the usage endpoint is offline.
+    // so it doesn't disappear when the usage endpoint is offline or the breaker
+    // is tripped.
     if (mode === 'extended') {
       try {
         const tk = await todayUsage();
         if (tk) { lastTokens = tk; if (win) win.webContents.send('tokens:update', tk); }
       } catch (_) { /* don't break the cycle */ }
     }
+    if (!allowNetwork) {
+      // Breaker is tripped and nothing re-armed it: local-only tick. Extended
+      // mode keeps its tokens pane fresh; the endpoint is left alone.
+      if (mode === 'extended') scheduleNext(POLL_ACTIVE_MS);
+      else clearTimeout(pollTimer);
+      return;
+    }
     try {
       const usage = await fetchUsage();
       lastGood = usage;
-      rlBackoff = 0; // recovered: reset the rate-limit backoff
+      rlBackoff = 0;   // recovered: reset the rate-limit backoff
+      rejected4xx = 0; // and re-arm the circuit breaker
       if (win) win.webContents.send('usage:update', usage);
       updateTrayTitle(usage);
       scheduleNext(POLL_ACTIVE_MS);
     } catch (err) {
-      if (win) win.webContents.send('usage:error', { message: err.message, expired: !!err.expired, at: Date.now(), last: lastGood });
+      const status = err && err.status;
+      if (err && err.rateLimited) {
+        // 429/529 is throttling, not rejection — the endpoint answered, so it's
+        // alive: fully re-arm the breaker and let the backoff below handle pace.
+        rejected4xx = 0;
+      } else if (Number.isInteger(status) && status >= 400 && status < 500) {
+        rejected4xx++; // the server actively refused us (401/403/404/410/...)
+      } else if (err && err.expired && !status) {
+        // locally detected expiry — no request was made; leave the breaker as-is
+      } else {
+        rejected4xx = 0; // network blip / 5xx: transient, not a rejection
+      }
+      const tripped = rejected4xx >= BREAKER_TRIP;
+      if (win) {
+        win.webContents.send('usage:error', {
+          message: err.message, expired: !!err.expired, unavailable: tripped, at: Date.now(), last: lastGood,
+        });
+      }
       if (err && err.rateLimited) {
         // 429/529: back off for real (exponential up to 30 min), honoring Retry-After
         rlBackoff = rlBackoff ? Math.min(rlBackoff * 2, 30 * 60 * 1000) : 5 * 60 * 1000;
         scheduleNext(Math.max(rlBackoff, (err.retryAfter || 0) * 1000));
+      } else if (tripped) {
+        // The endpoint keeps refusing: stop hitting it. Extended mode keeps a
+        // local-only tick (JSONL pane); pollNow() (refresh button, tray,
+        // credential rewrite, unlock/resume) allows one new attempt.
+        if (mode === 'extended') scheduleNext(POLL_ACTIVE_MS);
+        else clearTimeout(pollTimer);
       } else {
         scheduleNext(POLL_ERROR_MS); // network error: moderate retry
       }
@@ -225,6 +283,7 @@ async function poll() {
 
 function pollNow() {
   paused = false;
+  breakerRetry = true; // a deliberate signal (user gesture, new token, resume) re-arms one attempt
   if (polling) { pollQueued = true; return; } // coalesce into the in-flight poll
   scheduleNext(0);
 }
@@ -275,21 +334,47 @@ function rebuildTrayMenu() {
       label: i18n.t(L, 'update_restart'),
       click: () => { quitting = true; autoUpdater.quitAndInstall(); },
     });
+  } else if (updateAvailable && !updateDownloading) {
+    items.push({ type: 'separator' }, {
+      label: i18n.t(L, 'update_download'),
+      click: () => {
+        updateDownloading = true;
+        rebuildTrayMenu();
+        autoUpdater.downloadUpdate().catch(() => { updateDownloading = false; rebuildTrayMenu(); });
+      },
+    });
   }
   items.push({ type: 'separator' }, { label: i18n.t(L, 'tray_quit'), click: () => { quitting = true; app.quit(); } });
   tray.setContextMenu(Menu.buildFromTemplate(items));
 }
 
-// Auto-update via GitHub releases (packaged app only; NSIS — the portable doesn't update).
+// Update via GitHub releases (packaged app only; NSIS — the portable doesn't update).
 function setupUpdater() {
   // Packaged NSIS install only. The portable build can't self-update (latest.yml
   // points at the installer), so skip it there (electron-builder sets this env).
   if (!app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) return;
-  autoUpdater.autoDownload = true;
+  // Consent-first: the Windows build is unsigned, and electron-updater can't
+  // verify signatures on an unsigned app — so nothing is ever downloaded
+  // silently. We only check metadata; the user starts the download from the
+  // tray ("Download update") and the install happens on restart/quit.
+  autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  autoUpdater.on('update-downloaded', () => { updateReady = true; rebuildTrayMenu(); });
-  autoUpdater.on('error', () => { /* offline / no release: stay silent */ });
-  const check = () => { try { autoUpdater.checkForUpdates().catch(() => {}); } catch (_) {} };
+  autoUpdater.on('update-available', () => { updateAvailable = true; rebuildTrayMenu(); });
+  // e.g. a yanked release: stop offering a download that would just fail
+  autoUpdater.on('update-not-available', () => {
+    if (updateAvailable) { updateAvailable = false; rebuildTrayMenu(); }
+  });
+  autoUpdater.on('update-downloaded', () => { updateDownloading = false; updateReady = true; rebuildTrayMenu(); });
+  autoUpdater.on('error', () => {
+    // offline / no release / failed download: stay silent, re-offer the item
+    if (updateDownloading) { updateDownloading = false; rebuildTrayMenu(); }
+  });
+  const check = () => {
+    // Don't disturb an in-flight download or a downloaded-and-waiting update:
+    // a failed periodic check would otherwise reset the download state.
+    if (updateDownloading || updateReady) return;
+    try { autoUpdater.checkForUpdates().catch(() => {}); } catch (_) {}
+  };
   setTimeout(check, 15000);
   setInterval(check, 6 * 60 * 60 * 1000);
 }
@@ -382,16 +467,6 @@ ipcMain.on('settings:close', () => { if (settingsWin) settingsWin.close(); });
 ipcMain.handle('feedback:send', async (_e, text) => {
   const meta = `\n\n— Count Claudula v${app.getVersion()} · ${process.platform} · ${effectiveLocale()}`;
   const body = String(text || '').slice(0, 5000) + meta;
-  if (FEEDBACK_ENDPOINT) {
-    try {
-      const r = await fetch(FEEDBACK_ENDPOINT, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ message: body, app: 'Count Claudula', version: app.getVersion() }),
-      });
-      if (r.ok) return { ok: true, method: 'endpoint' };
-    } catch (_) { /* falls back to mailto */ }
-  }
   const subject = encodeURIComponent('Count Claudula — feedback');
   await shell.openExternal(`mailto:${FEEDBACK_EMAIL}?subject=${subject}&body=${encodeURIComponent(body)}`);
   return { ok: true, method: 'mailto' };
@@ -405,6 +480,7 @@ if (!gotLock) {
   app.on('second-instance', () => { if (win) { win.show(); win.focus(); } });
   app.whenReady().then(() => {
     if (process.platform === 'win32') app.setAppUserModelId('com.countclaudula.app');
+    migrateLegacyState();
     createWindow();
     buildTray();
     wirePowerEvents();

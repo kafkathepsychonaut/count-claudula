@@ -257,6 +257,85 @@
   };
   for (const k in UPDATE) if (DICT[k]) DICT[k].update_restart = UPDATE[k];
 
+  // Tray item shown when a new release exists but nothing was downloaded yet
+  // (consent-first updates: the user starts the download explicitly).
+  const UPDATE_DL = {
+    en: 'Download update', es: 'Descargar actualización', pt: 'Baixar atualização',
+    fr: 'Télécharger la mise à jour', de: 'Update herunterladen', it: "Scarica l'aggiornamento",
+    nl: 'Update downloaden', pl: 'Pobierz aktualizację', ru: 'Скачать обновление',
+    uk: 'Завантажити оновлення', cs: 'Stáhnout aktualizaci', sk: 'Stiahnuť aktualizáciu',
+    ro: 'Descarcă actualizarea', hu: 'Frissítés letöltése', el: 'Λήψη ενημέρωσης',
+    sv: 'Ladda ner uppdatering', da: 'Download opdatering', fi: 'Lataa päivitys',
+    nb: 'Last ned oppdatering', tr: 'Güncellemeyi indir', ca: "Baixa l'actualització",
+    bg: 'Изтегли актуализацията', hr: 'Preuzmi ažuriranje', sr: 'Преузми ажурирање',
+    lt: 'Atsisiųsti atnaujinimą', ja: '更新をダウンロード', ko: '업데이트 다운로드',
+    zh: '下载更新', vi: 'Tải bản cập nhật', th: 'ดาวน์โหลดอัปเดต',
+    id: 'Unduh pembaruan', ms: 'Muat turun kemas kini', fil: 'I-download ang update',
+    hi: 'अपडेट डाउनलोड करें', ar: 'تنزيل التحديث', he: 'הורד עדכון',
+    fa: 'دانلود به‌روزرسانی',
+  };
+  for (const k in UPDATE_DL) if (DICT[k]) DICT[k].update_download = UPDATE_DL[k];
+
+  // Circuit breaker tripped: the usage endpoint keeps refusing, so polling
+  // stopped. Short status + honest tooltip with the retry gesture.
+  const UNAVAILABLE = {
+    en: 'usage unavailable', es: 'uso no disponible', pt: 'uso indisponível',
+    fr: 'usage indisponible', de: 'Nutzung nicht verfügbar', it: 'utilizzo non disponibile',
+    nl: 'gebruik niet beschikbaar', pl: 'zużycie niedostępne', ru: 'данные недоступны',
+    uk: 'дані недоступні', cs: 'údaje nedostupné', sk: 'údaje nedostupné',
+    ro: 'utilizare indisponibilă', hu: 'a használat nem érhető el', el: 'μη διαθέσιμη χρήση',
+    sv: 'användning otillgänglig', da: 'forbrug utilgængeligt', fi: 'käyttö ei saatavilla',
+    nb: 'forbruk utilgjengelig', tr: 'kullanım alınamıyor', ca: 'ús no disponible',
+    bg: 'данните са недостъпни', hr: 'podaci nedostupni', sr: 'подаци недоступни',
+    lt: 'duomenys nepasiekiami', ja: '使用状況を取得できません', ko: '사용량을 가져올 수 없음',
+    zh: '无法获取用量', vi: 'không lấy được mức dùng', th: 'ดึงข้อมูลการใช้งานไม่ได้',
+    id: 'data pemakaian tak tersedia', ms: 'data penggunaan tiada', fil: 'hindi makuha ang usage',
+    hi: 'उपयोग डेटा अनुपलब्ध', ar: 'الاستخدام غير متاح', he: 'נתוני שימוש לא זמינים',
+    fa: 'داده مصرف در دسترس نیست',
+  };
+  for (const k in UNAVAILABLE) if (DICT[k]) DICT[k].unavailable = UNAVAILABLE[k];
+
+  const UNAVAILABLE_HINT = {
+    en: 'The usage endpoint stopped answering (it may have changed or closed). Checks are paused — press ↻ to try again.',
+    es: 'El endpoint de uso dejó de responder (puede haber cambiado o cerrado). Las consultas están en pausa: pulsa ↻ para reintentar.',
+    pt: 'O endpoint de uso parou de responder (pode ter mudado ou sido fechado). As consultas estão pausadas — toque em ↻ para tentar de novo.',
+    fr: "Le point d'accès d'usage ne répond plus (il a peut-être changé ou fermé). Les requêtes sont en pause — appuyez sur ↻ pour réessayer.",
+    de: 'Der Nutzungs-Endpunkt antwortet nicht mehr (er wurde evtl. geändert oder geschlossen). Abfragen sind pausiert – mit ↻ erneut versuchen.',
+    it: "L'endpoint di utilizzo ha smesso di rispondere (potrebbe essere cambiato o chiuso). Le richieste sono in pausa — premi ↻ per riprovare.",
+    nl: 'Het gebruiks-endpoint reageert niet meer (mogelijk gewijzigd of gesloten). Controles zijn gepauzeerd — druk op ↻ om opnieuw te proberen.',
+    pl: 'Endpoint zużycia przestał odpowiadać (mógł się zmienić lub zostać zamknięty). Odpytywanie wstrzymane — naciśnij ↻, aby spróbować ponownie.',
+    ru: 'Эндпоинт использования перестал отвечать (возможно, изменился или закрыт). Опрос приостановлен — нажмите ↻, чтобы попробовать снова.',
+    uk: 'Ендпоінт використання перестав відповідати (можливо, змінився або закритий). Опитування призупинено — натисніть ↻, щоб спробувати ще раз.',
+    cs: 'Endpoint využití přestal odpovídat (možná se změnil nebo byl uzavřen). Dotazy jsou pozastaveny — stiskněte ↻ pro nový pokus.',
+    sk: 'Endpoint využitia prestal odpovedať (možno sa zmenil alebo bol uzavretý). Dopyty sú pozastavené — stlačte ↻ a skúste znova.',
+    ro: 'Endpointul de utilizare nu mai răspunde (poate s-a schimbat sau a fost închis). Interogările sunt în pauză — apasă ↻ pentru a reîncerca.',
+    hu: 'A használati végpont nem válaszol (lehet, hogy megváltozott vagy lezárták). A lekérdezések szünetelnek — nyomd meg a ↻ gombot az újrapróbáláshoz.',
+    el: 'Το endpoint χρήσης σταμάτησε να αποκρίνεται (ίσως άλλαξε ή έκλεισε). Οι έλεγχοι είναι σε παύση — πάτησε ↻ για νέα προσπάθεια.',
+    sv: 'Användnings-endpointen svarar inte längre (den kan ha ändrats eller stängts). Kontrollerna är pausade — tryck ↻ för att försöka igen.',
+    da: 'Forbrugs-endpointet svarer ikke længere (det kan være ændret eller lukket). Tjek er sat på pause — tryk ↻ for at prøve igen.',
+    fi: 'Käyttöpiste lakkasi vastaamasta (se on voinut muuttua tai sulkeutua). Kyselyt on keskeytetty — paina ↻ yrittääksesi uudelleen.',
+    nb: 'Forbruks-endepunktet svarer ikke lenger (det kan ha endret seg eller blitt stengt). Sjekker er satt på pause — trykk ↻ for å prøve igjen.',
+    tr: 'Kullanım uç noktası yanıt vermeyi bıraktı (değişmiş veya kapatılmış olabilir). Sorgular duraklatıldı — yeniden denemek için ↻ tuşuna basın.',
+    ca: "L'endpoint d'ús ha deixat de respondre (pot haver canviat o tancat). Les consultes estan en pausa — prem ↻ per tornar-ho a provar.",
+    bg: 'Ендпойнтът за използване спря да отговаря (може да е променен или затворен). Проверките са на пауза — натиснете ↻, за да опитате отново.',
+    hr: 'Endpoint potrošnje prestao je odgovarati (možda je promijenjen ili zatvoren). Provjere su pauzirane — pritisni ↻ za novi pokušaj.',
+    sr: 'Ендпоинт потрошње је престао да одговара (можда је промењен или затворен). Провере су паузиране — притисни ↻ за нови покушај.',
+    lt: 'Naudojimo prieigos taškas nebeatsako (galėjo pasikeisti ar būti uždarytas). Užklausos pristabdytos — paspauskite ↻, kad bandytumėte dar kartą.',
+    ja: '使用状況エンドポイントが応答しなくなりました（変更または閉鎖された可能性があります）。確認は一時停止中です。↻ を押して再試行してください。',
+    ko: '사용량 엔드포인트가 응답하지 않습니다(변경되었거나 닫혔을 수 있음). 확인이 일시 중지됨 — ↻을 눌러 다시 시도하세요.',
+    zh: '用量接口不再响应（可能已更改或关闭）。查询已暂停——按 ↻ 重试。',
+    vi: 'Endpoint mức dùng không còn phản hồi (có thể đã thay đổi hoặc bị đóng). Truy vấn đã tạm dừng — nhấn ↻ để thử lại.',
+    th: 'จุดเชื่อมต่อข้อมูลการใช้งานหยุดตอบสนอง (อาจถูกเปลี่ยนหรือปิดไปแล้ว) การตรวจสอบถูกหยุดชั่วคราว — กด ↻ เพื่อลองอีกครั้ง',
+    id: 'Endpoint pemakaian berhenti merespons (mungkin berubah atau ditutup). Pemeriksaan dijeda — tekan ↻ untuk mencoba lagi.',
+    ms: 'Endpoint penggunaan berhenti membalas (mungkin berubah atau ditutup). Semakan dijeda — tekan ↻ untuk cuba lagi.',
+    fil: 'Huminto sa pagsagot ang usage endpoint (maaaring nagbago o isinara na). Naka-pause ang pag-check — pindutin ang ↻ para subukan ulit.',
+    hi: 'उपयोग एंडपॉइंट ने जवाब देना बंद कर दिया (यह बदल गया या बंद हो गया हो सकता है)। जाँच रुकी हुई है — फिर से कोशिश करने के लिए ↻ दबाएँ।',
+    ar: 'توقف مسار الاستخدام عن الاستجابة (ربما تغيّر أو أُغلق). الفحوصات متوقفة مؤقتًا — اضغط ↻ لإعادة المحاولة.',
+    he: 'נקודת הקצה של השימוש הפסיקה להגיב (ייתכן שהשתנתה או נסגרה). הבדיקות מושהות — לחצו ↻ כדי לנסות שוב.',
+    fa: 'نقطه پایانی مصرف دیگر پاسخ نمی‌دهد (شاید تغییر کرده یا بسته شده باشد). بررسی‌ها متوقف شده‌اند — برای تلاش دوباره ↻ را بزنید.',
+  };
+  for (const k in UNAVAILABLE_HINT) if (DICT[k]) DICT[k].unavailable_hint = UNAVAILABLE_HINT[k];
+
   const ALIAS = { no: 'nb', nn: 'nb', iw: 'he', tl: 'fil', in: 'id' };
 
   function normalize(loc) {

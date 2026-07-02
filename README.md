@@ -49,8 +49,9 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   `~/.claude/projects/**/*.jsonl` (read-only, never touches the network).
   (See [`src/usage-jsonl.js`](src/usage-jsonl.js).)
 - Nothing else leaves your machine — no account, no telemetry, no tracking. (The
-  packaged app does check GitHub for app updates on launch and every 6h; the
-  portable build does not. There is no usage telemetry either way.)
+  packaged app checks GitHub for app updates on launch and every 6h, but **never
+  downloads one silently** — you start the download yourself from the tray menu.
+  The portable build doesn't even check. There is no usage telemetry either way.)
 
 > ⚠️ **Heads up on Anthropic's Terms.** The `/api/oauth/usage` endpoint is
 > **internal/undocumented** and may change or be locked to the official client at
@@ -58,8 +59,11 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
 > is **automated access to Anthropic's services** and is plausibly **against
 > Anthropic's Consumer Terms** (their §3.7 restricts automated/scripted access).
 > In principle this could cause your Claude account to be rate-limited or flagged.
-> This tool minimizes that footprint (read-only, gentle polling, no token minting),
-> but **you use it at your own risk** — read the Terms and decide for yourself.
+> This tool minimizes that footprint (read-only, gentle polling, no token minting,
+> an honest `count-claudula/x.y.z` User-Agent), and if the endpoint ever starts
+> refusing requests the widget **stops polling entirely** instead of hammering it
+> (a manual ↻ re-arms it). Still: **you use it at your own risk** — read the Terms
+> and decide for yourself.
 
 ## 🔍 Don't trust — audit, or build it yourself
 
