@@ -891,6 +891,48 @@
   };
   for (const k in AVG7_V2) if (DICT[k]) DICT[k].avg_7d = AVG7_V2[k];
 
+  // the statusLine source cannot show paid extra usage or per-model limits — say so where the source is chosen
+  const SOURCE_SCOPE_NOTE = {
+    en: "this source has no paid extra-usage or per-model limit data — those need the Anthropic endpoint",
+    es: "esta fuente no tiene datos de uso extra de pago ni de límites por modelo — para eso hace falta el endpoint de Anthropic",
+    pt: "esta fonte não tem dados de uso extra pago nem de limites por modelo — para isso é preciso o endpoint da Anthropic",
+    fr: "cette source ne fournit ni l'usage extra payant ni les limites par modèle — ces données nécessitent le point d'accès Anthropic",
+    de: "diese Quelle hat keine Daten zu bezahlter Zusatznutzung oder Limits pro Modell — dafür ist der Anthropic-Endpunkt nötig",
+    it: "questa fonte non ha dati sull'uso extra a pagamento né sui limiti per modello — per quelli serve l'endpoint di Anthropic",
+    nl: "deze bron heeft geen gegevens over betaald extra gebruik of limieten per model — daarvoor is het Anthropic-endpoint nodig",
+    pl: "to źródło nie ma danych o płatnej nadwyżce ani o limitach poszczególnych modeli — do tego potrzebny jest endpoint Anthropic",
+    ru: "в этом источнике нет данных о платном дополнительном использовании и лимитах по моделям — для них нужен эндпоинт Anthropic",
+    uk: "у цьому джерелі немає даних про платне додаткове використання та ліміти за моделями — для них потрібен ендпоінт Anthropic",
+    cs: "tento zdroj nemá data o placeném využití navíc ani o limitech jednotlivých modelů — k tomu je potřeba endpoint Anthropic",
+    sk: "tento zdroj nemá dáta o platenom využití navyše ani o limitoch jednotlivých modelov — na to je potrebný endpoint Anthropic",
+    ro: "această sursă nu are date despre utilizarea extra plătită sau despre limitele per model — pentru acestea e nevoie de endpointul Anthropic",
+    hu: "ez a forrás nem tartalmaz adatokat a fizetett extra használatról és a modellenkénti limitekről — ezekhez az Anthropic-végpont kell",
+    el: "αυτή η πηγή δεν έχει δεδομένα για επιπλέον χρήση επί πληρωμή ή όρια ανά μοντέλο — γι' αυτά χρειάζεται το endpoint της Anthropic",
+    sv: "den här källan saknar data om betald extraanvändning och gränser per modell — för det krävs Anthropic-endpointen",
+    da: "denne kilde har ingen data om betalt ekstraforbrug eller grænser pr. model — det kræver Anthropic-endpointet",
+    fi: "tässä lähteessä ei ole tietoja maksullisesta lisäkäytöstä eikä mallikohtaisista rajoista — niihin tarvitaan Anthropicin päätepiste",
+    nb: "denne kilden har ingen data om betalt ekstrabruk eller grenser per modell — det krever Anthropic-endepunktet",
+    tr: "bu kaynakta ücretli ek kullanım veya modele göre limit verisi yok — bunlar için Anthropic uç noktası gerekir",
+    ca: "aquesta font no té dades d'ús extra de pagament ni de límits per model — per a això cal l'endpoint d'Anthropic",
+    bg: "този източник няма данни за платено допълнително използване и лимити по модел — за тях е нужен ендпойнтът на Anthropic",
+    hr: "ovaj izvor nema podatke o plaćenom višku potrošnje ni limitima po modelu — za to je potreban Anthropicov endpoint",
+    sr: "овај извор нема податке о плаћеном вишку потрошње ни лимитима по моделу — за то је потребан Anthropic ендпоинт",
+    lt: "šiame šaltinyje nėra duomenų apie mokamą papildomą naudojimą ar limitus pagal modelį — tam reikia Anthropic prieigos taško",
+    ja: "このソースには有料の超過使用やモデル別上限のデータはありません。取得には Anthropic のエンドポイントが必要です。",
+    ko: "이 소스에는 유료 초과 사용이나 모델별 한도 데이터가 없습니다. 해당 데이터에는 Anthropic 엔드포인트가 필요합니다.",
+    zh: "此来源不含付费超额用量和按模型限额的数据——这些数据需要 Anthropic 接口。",
+    vi: "Nguồn này không có dữ liệu dùng vượt mức trả phí hay giới hạn theo mô hình — những dữ liệu đó cần endpoint của Anthropic.",
+    th: "แหล่งข้อมูลนี้ไม่มีข้อมูลการใช้เกินโควตาแบบชำระเงินหรือลิมิตตามโมเดล — ข้อมูลเหล่านี้ต้องใช้จุดเชื่อมต่อของ Anthropic",
+    id: "sumber ini tidak memiliki data pemakaian ekstra berbayar atau batas per model — keduanya memerlukan endpoint Anthropic",
+    ms: "sumber ini tiada data penggunaan lebihan berbayar atau had mengikut model — kedua-duanya memerlukan endpoint Anthropic",
+    fil: "walang data ang source na ito sa bayad na sobrang paggamit o limitasyon bawat model — kailangan ng Anthropic endpoint para sa mga iyon",
+    hi: "इस स्रोत में सशुल्क अतिरिक्त उपयोग या मॉडल अनुसार सीमा का डेटा नहीं है — इनके लिए Anthropic एंडपॉइंट चाहिए।",
+    ar: "لا يوفّر هذا المصدر بيانات الاستخدام الزائد المدفوع أو الحدود حسب النموذج — فهذه تتطلّب مسار Anthropic",
+    he: "למקור זה אין נתוני חריגה בתשלום או מגבלות לפי מודל — אלה דורשים את נקודת הקצה של Anthropic",
+    fa: "این منبع داده مصرف اضافه پولی یا حد به تفکیک مدل را ندارد — این‌ها به نقطه پایانی Anthropic نیاز دارند",
+  };
+  for (const k in SOURCE_SCOPE_NOTE) if (DICT[k]) DICT[k].source_scope_note = SOURCE_SCOPE_NOTE[k];
+
   const ALIAS = { no: 'nb', nn: 'nb', iw: 'he', tl: 'fil', in: 'id' };
 
   function normalize(loc) {

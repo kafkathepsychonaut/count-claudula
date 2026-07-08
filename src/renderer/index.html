@@ -81,9 +81,6 @@
     .status.stale { color: var(--terra); }
     .status.idle { color: var(--terra); }
     .models { font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
-    .models.ov { color: var(--coral); font-weight: 600; }
-    .models.ov-warn { color: var(--lvl-warn); font-weight: 600; }
-    .models.ov-crit { color: var(--lvl-crit); font-weight: 700; }
     .divider { height: 1px; background: var(--line); margin: 9px 0 6px; }
     /* section headers: structure (rule + spacing), not just uppercase — the
        uppercase device is a no-op in ~10 of the 37 languages */
@@ -150,6 +147,9 @@
     .lim-row .lk { color: var(--ink-dim); flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lim-row .track { flex: 1 1 auto; height: 6px; }
     .lim-row .lv { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 32px; text-align: right; }
+    /* overage value carries two currency amounts — smaller type, and the bar keeps a floor */
+    .lim-row .lv.ov { font-size: 10px; }
+    .lim-row .track { min-width: 40px; }
     .lim-row .lc { flex: 0 0 auto; font-size: 9.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
     .lim-row .lv.ok { color: var(--lvl-ok); } .lim-row .lv.warn { color: var(--lvl-warn); } .lim-row .lv.crit { color: var(--lvl-crit); }
     #limits:not(:empty) { margin: -3px 0 2px; }
@@ -181,6 +181,13 @@
     body.collapsed .body { display: none; }
     body.collapsed .titlebar { display: none; }
     body.collapsed .mini { display: flex; }
+    /* API-key/Console account: no subscription windows exist — hide the dead
+       bars and lead with today's cost (the pane shows in simple mode too) */
+    body.nocred .winrow { display: none; }
+    body.nocred #ext { display: flex; }
+    body.nocred .mini-k, body.nocred .mini-sep, body.nocred #mini-seven { display: none; }
+    /* the nocred pill shows LOCAL data (JSONL) — the endpoint being N/A must not dim it */
+    body.nocred #mini-five { opacity: 1; }
   </style>
 </head>
 <body>
@@ -204,7 +211,7 @@
     </div>
 
     <div id="body" class="body">
-      <div class="row">
+      <div class="row winrow">
         <div class="row-head">
           <span class="label" data-i18n="five_hour">5 hours</span>
           <span class="pct" id="five-pct">--</span>
@@ -213,7 +220,7 @@
         <div class="reset-row"><span class="reset" id="five-reset">&nbsp;</span><span class="pace" id="five-pace" dir="ltr" data-i18n-title="pace_hint"></span></div>
       </div>
 
-      <div class="row">
+      <div class="row winrow">
         <div class="row-head">
           <span class="label" data-i18n="week">week</span>
           <span class="pct" id="seven-pct">--</span>

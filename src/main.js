@@ -303,7 +303,10 @@ async function poll() {
     // Claude Code tokens: LOCAL data (JSONL). Runs independently of the network,
     // so it doesn't disappear when the usage endpoint is offline or the breaker
     // is tripped.
-    if (mode === 'extended') {
+    let tokensFetched = false;
+    const fetchTokens = async () => {
+      if (tokensFetched) return;
+      tokensFetched = true;
       try {
         // null = no logs at all (Claude Code never ran): tell the renderer so it
         // can explain itself instead of showing dashes forever
@@ -311,7 +314,10 @@ async function poll() {
         lastTokens = tk;
         if (win) win.webContents.send('tokens:update', tk);
       } catch (_) { /* don't break the cycle */ }
-    }
+    };
+    // API-key/Console accounts have no subscription bars — the token pane IS the
+    // widget for them, so it stays fresh in simple mode too.
+    if (mode === 'extended' || (lastError && lastError.noCredential)) await fetchTokens();
     if (getSettings().source === 'statusline') {
       // statusLine source: 100% local (capture file written by Claude Code's
       // statusLine hook). No network, so no breaker/backoff concerns.
@@ -323,17 +329,24 @@ async function poll() {
         if (win) win.webContents.send('usage:update', usage);
         updateTrayTitle(usage);
       } catch (err) {
-        lastError = { message: err.message, expired: !!err.expired, at: Date.now(), last: lastGood };
+        lastError = {
+          message: err.message, expired: !!err.expired, noCredential: !!err.noCredential,
+          at: Date.now(), last: lastGood,
+        };
         if (win) win.webContents.send('usage:error', lastError);
         updateTrayTitleStale();
+        // API-key account on the statusline source: the token pane is the
+        // widget's content — keep it fresh regardless of mode
+        if (err.noCredential) await fetchTokens();
       }
       scheduleNext(POLL_ACTIVE_MS);
       return;
     }
     if (!allowNetwork) {
       // Breaker is tripped and nothing re-armed it: local-only tick. Extended
-      // mode keeps its tokens pane fresh; the endpoint is left alone.
-      if (mode === 'extended') scheduleNext(POLL_ACTIVE_MS);
+      // mode — and API-key accounts, whose token pane is their main content —
+      // keep the local data fresh; the endpoint is left alone.
+      if (mode === 'extended' || (lastError && lastError.noCredential)) scheduleNext(POLL_ACTIVE_MS);
       else clearTimeout(pollTimer);
       return;
     }
@@ -370,7 +383,9 @@ async function poll() {
       if (err && err.noCredential) {
         // API-key / Console account: a steady state, not an outage. Poll at the
         // calm cadence — the credential watcher re-polls instantly if a
-        // subscription login ever appears.
+        // subscription login ever appears. The token pane is this account's
+        // main content, so fill it right away (first poll included).
+        await fetchTokens();
         scheduleNext(POLL_ACTIVE_MS);
       } else if (err && err.rateLimited) {
         // 429/529: back off for real (exponential up to 30 min), honoring Retry-After
@@ -582,7 +597,7 @@ function openSettings() {
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
     width: 344,
-    height: 560,
+    height: 630, // the statusline hint + scope note push the footer past 560 even in en
     resizable: false,
     minimizable: false,
     maximizable: false,

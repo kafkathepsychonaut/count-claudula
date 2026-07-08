@@ -156,10 +156,17 @@ function renderPace(u) {
 }
 
 function renderMini(u) {
-  const five = u && u.fiveHour ? u.fiveHour.utilization : null;
-  const seven = u && u.sevenDay ? u.sevenDay.utilization : null;
   const f = $('mini-five');
   const s = $('mini-seven');
+  // API-key account: there are no windows to show — the pill carries today's
+  // cost instead (the 5h/7d labels and second value are hidden via body.nocred)
+  if (nocredFlag && lastTk && !lastTk.noData) {
+    f.textContent = fmtMoney(lastTk.cost || 0);
+    f.className = '';
+    return;
+  }
+  const five = u && u.fiveHour ? u.fiveHour.utilization : null;
+  const seven = u && u.sevenDay ? u.sevenDay.utilization : null;
   f.textContent = five != null ? five + '%' : '--';
   s.textContent = seven != null ? seven + '%' : '--';
   // the level shows even collapsed: 85%+ must read as critical at a glance
@@ -168,19 +175,9 @@ function renderMini(u) {
 }
 
 function renderModels(u) {
+  // paid overage now has its own bar with the limits (overageRow) — the footer
+  // keeps the per-model percentages instead of duplicating the money
   const el = $('models');
-  // paid overage takes priority (real money); only shown when enabled
-  const ov = u.overage;
-  if (ov && ov.enabled) {
-    // used / limit: the only real-money figure in the app gets its denominator
-    const denom = ov.limit > 0 ? ` / ${fmtMoney(ov.limit, ov.currency)}` : ` · ${ov.percent}%`;
-    el.textContent = `${t('overage')} ${fmtMoney(ov.used, ov.currency)}${denom}`;
-    const sev = String(ov.severity || '').toLowerCase();
-    const cls = (sev.includes('crit') || sev.includes('alert')) ? 'ov-crit'
-      : (sev.includes('warn') || sev.includes('high')) ? 'ov-warn' : 'ov';
-    el.className = 'models ' + cls;
-    return;
-  }
   el.className = 'models';
   const parts = [];
   if (u.sevenDayOpus && u.sevenDayOpus.utilization > 0) parts.push('opus ' + u.sevenDayOpus.utilization + '%');
@@ -188,14 +185,44 @@ function renderModels(u) {
   el.textContent = parts.join('  ');
 }
 
+// Paid extra usage is the only figure in the app that becomes a real invoice —
+// it gets a bar of its own with the account limits, not just a footer word.
+function overageRow(ov) {
+  const row = document.createElement('div');
+  row.className = 'lim-row';
+  const sev = String(ov.severity || '').toLowerCase();
+  const lvl = (sev.includes('crit') || sev.includes('alert')) ? 'crit'
+    : (sev.includes('warn') || sev.includes('high')) ? 'warn' : levelClass(ov.percent || 0);
+  const k = document.createElement('span');
+  k.className = 'lk';
+  k.textContent = t('overage');
+  const track = document.createElement('div');
+  track.className = 'track';
+  const fill = document.createElement('div');
+  fill.className = 'fill ' + lvl;
+  fill.style.width = Math.min(100, ov.percent || 0) + '%';
+  track.appendChild(fill);
+  const v = document.createElement('span');
+  v.className = 'lv ov ' + lvl; // .ov: smaller type — two currency amounts must not crush the bar
+  v.dir = 'ltr'; // "$used / $limit" must not reorder in RTL locales
+  v.textContent = ov.limit > 0
+    ? `${fmtMoney(ov.used, ov.currency)} / ${fmtMoney(ov.limit, ov.currency)}`
+    : `${fmtMoney(ov.used, ov.currency)} · ${ov.percent || 0}%`;
+  row.title = v.textContent + (ov.percent != null ? ` · ${ov.percent}%` : '');
+  row.append(k, track, v);
+  return row;
+}
+
 // Scoped account limits (per-model weekly caps etc): rendered with the headline
 // bars — same payload, same subject. Countdown inline once the limit matters.
 function renderLimits(u) {
   const el = $('limits');
   el.textContent = '';
+  const hasOverage = !!(u && u.overage && u.overage.enabled);
+  if (hasOverage) el.appendChild(overageRow(u.overage));
   const rows = (u && u.limits ? u.limits : [])
     .filter((l) => l.kind !== 'session' && l.kind !== 'weekly_all')
-    .slice(0, 4); // keep the widget glanceable; cap the list
+    .slice(0, hasOverage ? 3 : 4); // keep the widget glanceable; cap the list
   for (const l of rows) {
     const lvl = levelClass(l.percent);
     const row = document.createElement('div');
@@ -273,10 +300,15 @@ function renderStatus(u) {
 function renderAll() {
   // stale data must not look live (bars dim, countdown freezes)
   document.body.classList.toggle('stale', stale);
+  // API-key/Console account: the subscription bars don't exist for this login —
+  // hide them and lead with today's cost instead of two dead "--" meters
+  document.body.classList.toggle('nocred', nocredFlag);
   if (!latest) {
     // No data yet: if the first fetch failed, at least show the status
     // (offline/expired) instead of staying stuck on "connecting…".
     if (stale) { renderWindow('five', null); renderWindow('seven', null); renderPace(null); renderMini(null); renderStatus(null); }
+    syncHeroHint();  // nocred accounts reach this path — the tooltip must not claim "covered by your subscription"
+    reportHeight();  // the nocred toggle above changes what's visible
     return;
   }
   renderWindow('five', latest.fiveHour);
@@ -433,6 +465,7 @@ api.onTokens((tk) => {
   lastTk = tk;
   stopSpin();
   renderTokens(tk);
+  if (nocredFlag) renderMini(latest); // the pill mirrors today's cost for API-key accounts
 });
 
 api.onUsage((u) => {

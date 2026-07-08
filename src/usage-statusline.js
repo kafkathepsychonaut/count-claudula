@@ -79,8 +79,14 @@ function readStatusline(userData) {
   const fiveHour = norm(rl.five_hour);
   const sevenDay = norm(rl.seven_day);
   if (!fiveHour && !sevenDay) {
-    // payload exists but carries no rate_limits (old Claude Code, or schema drift)
-    const e = new Error('statusline payload has no rate_limits'); e.expired = true; throw e;
+    // A FRESH capture with no rate_limits means Claude Code is demonstrably
+    // running but the account has no subscription windows to report — an
+    // API-key / Console login. Signal it like the endpoint source does, so the
+    // widget switches to its cost-first layout instead of nagging
+    // "open Claude Code" at someone who has it open.
+    const e = new Error('statusline payload has no rate_limits (API key / Console account)');
+    e.noCredential = true;
+    throw e;
   }
   return {
     fetchedAt: j.at,

@@ -26,6 +26,28 @@ function tierOf(model) {
   return 'other';
 }
 
+// Billing modifiers the JSONL already records per line (ref. claude-api /
+// service-tiers + fast-mode docs 2026-07). They stack multiplicatively on the
+// standard per-token price; priority tier bills at standard rates (it's a
+// capacity commitment, not a price change), so it needs no factor here.
+function costMultiplier(usage, model) {
+  let mult = 1;
+  const id = String(model || '').toLowerCase();
+  if (usage.service_tier === 'batch') mult *= 0.5; // Batch API: 50% of standard
+  if (usage.speed === 'fast') {
+    // fast mode premium is per-model; unsupported models bill standard and
+    // report usage.speed 'standard', so keying off the reported speed is safe
+    if (id.includes('opus-4-8')) mult *= 2;
+    else if (id.includes('opus-4-7')) mult *= 6;
+  }
+  // US-only inference: 1.1x on Opus 4.6/Sonnet 4.6 and later. Pre-4.6 models
+  // reject the parameter outright, so an EXCLUSION list of the old families is
+  // forward-compatible where an allowlist would silently miss future models.
+  const preGeo = /(opus-4-[0-5]|sonnet-4-[0-5]|haiku-4-5)(?!\d)|claude-[23][.-]/;
+  if (usage.inference_geo === 'us' && !preGeo.test(id)) mult *= 1.1;
+  return mult;
+}
+
 function projectsDir() {
   const base = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   return path.join(base, 'projects');
@@ -106,7 +128,8 @@ async function aggregateFile(fp, todayMs, weekMs, dayIdx) {
     const cc = u.cache_creation || {};
     const w1 = cc.ephemeral_1h_input_tokens || 0;
     const w5 = cc.ephemeral_5m_input_tokens != null ? cc.ephemeral_5m_input_tokens : Math.max(0, cwTot - w1);
-    const lineCost = (inp * p.in + out * p.out + cr * p.read + w1 * p.w1 + w5 * p.w5) / 1e6;
+    const mult = costMultiplier(u, msg.model);
+    const lineCost = mult * (inp * p.in + out * p.out + cr * p.read + w1 * p.w1 + w5 * p.w5) / 1e6;
 
     if (ts < todayMs) {
       // bucket by exact local day (DST-safe); a line outside the 7 mapped days
@@ -123,8 +146,9 @@ async function aggregateFile(fp, todayMs, weekMs, dayIdx) {
     m.input += inp; m.output += out; m.cacheRead += cr; m.cacheWrite += cwTot; m.cost += lineCost;
     agg.input += inp; agg.output += out; agg.cacheRead += cr; agg.cacheWrite += cwTot; agg.cost += lineCost;
     // net cache economics vs a no-cache baseline (all those tokens as plain
-    // input): reads save (in − read) each, writes cost a premium over input
-    agg.savings += (cr * (p.in - p.read) - w1 * (p.w1 - p.in) - w5 * (p.w5 - p.in)) / 1e6;
+    // input): reads save (in − read) each, writes cost a premium over input.
+    // Billing modifiers scale every token price, so the delta scales too.
+    agg.savings += mult * (cr * (p.in - p.read) - w1 * (p.w1 - p.in) - w5 * (p.w5 - p.in)) / 1e6;
     const proj = projectKeyOf(j.cwd);
     if (proj) {
       const pr = agg.byProject[proj] || (agg.byProject[proj] = { cost: 0 });
