@@ -51,6 +51,7 @@ let lastError = null;        // last usage:error payload (replayed to a fresh re
 let lastTokens = null;       // last aggregate of Claude Code tokens
 let settingsWin = null;
 let updateAvailable = false; // a newer release exists (metadata only, nothing downloaded)
+let updateSnoozed = false;   // banner dismissed for this version (tray still offers it)
 let updateDownloading = false;
 let updateReady = false;     // downloaded; "update & restart" shows in tray + widget banner
 let updateVersion = '';      // version string of the offered update
@@ -61,6 +62,37 @@ let breakerRetry = false;    // pollNow() sets it: allow one network attempt whi
 let polling = false;         // a poll is in flight (avoid overlapping requests)
 let pollQueued = false;      // a refresh arrived mid-poll; run once more after
 let quitting = false;
+let paceSamples = [];        // recent (t, 5h-utilization) samples -> burn-rate hint
+
+// ---- Pace (burn rate) ----
+// The endpoint is sampled every ~3 min anyway; keeping a short window of those
+// samples lets the widget answer its core question — "am I going to hit the
+// limit before it resets?" — instead of only showing the current level.
+const PACE_WINDOW_MS = 90 * 60 * 1000;
+const PACE_MIN_SPAN_MS = 10 * 60 * 1000; // need some runway before a slope means anything
+
+function computePace(usage) {
+  const w = usage && usage.fiveHour;
+  if (!w || typeof w.utilization !== 'number') { paceSamples = []; return null; }
+  const now = usage.fetchedAt || Date.now();
+  const last = paceSamples[paceSamples.length - 1];
+  // window rolled (reset happened or resets_at moved): old slope is meaningless
+  if (last && (w.utilization < last.u || (last.r && w.resetsAt && last.r !== w.resetsAt))) paceSamples = [];
+  if (!last || last.t !== now) paceSamples.push({ t: now, u: w.utilization, r: w.resetsAt });
+  paceSamples = paceSamples.filter((s) => now - s.t <= PACE_WINDOW_MS);
+  const first = paceSamples[0];
+  const spanMs = now - first.t;
+  if (paceSamples.length < 2 || spanMs < PACE_MIN_SPAN_MS) return null;
+  const perHour = (w.utilization - first.u) / (spanMs / 3600000);
+  if (!(perHour > 0.5)) return null; // flat/idle: no hint is better than "+0%/h"
+  const hoursToReset = w.resetsAt ? (new Date(w.resetsAt).getTime() - now) / 3600000 : 0;
+  const hoursTo100 = (100 - w.utilization) / perHour;
+  return {
+    perHour: Math.round(perHour),
+    // "hot" = at this pace the limit arrives before the reset does
+    hot: hoursToReset > 0 && hoursTo100 < hoursToReset,
+  };
+}
 
 // ---- Position/state persistence ----
 // v1.0.1 had no top-level productName, so Electron derived the userData dir
@@ -222,7 +254,20 @@ function setMode(next) {
   extHeight = 0; // stale for the new mode; the renderer re-reports right after
   saveState({ mode });
   applyBounds();
+  rebuildTrayMenu(); // the tray's simple/detailed entry mirrors the mode
   if (mode === 'extended') pollNow(); // fetch tokens now
+}
+
+// Tray-initiated mode change: main owns the state, the renderer must follow.
+// The menu item promises a view — a collapsed pill must expand to show it.
+function toggleMode() {
+  if (collapsed) setCollapsed(false);
+  setMode(mode === 'extended' ? 'simple' : 'extended');
+  if (win) {
+    win.show();
+    win.webContents.send('ui:expand');
+    win.webContents.send('ui:modeset', mode);
+  }
 }
 
 function setExtMore(next) {
@@ -260,8 +305,11 @@ async function poll() {
     // is tripped.
     if (mode === 'extended') {
       try {
-        const tk = await todayUsage();
-        if (tk) { lastTokens = tk; if (win) win.webContents.send('tokens:update', tk); }
+        // null = no logs at all (Claude Code never ran): tell the renderer so it
+        // can explain itself instead of showing dashes forever
+        const tk = (await todayUsage()) || { noData: true, at: Date.now() };
+        lastTokens = tk;
+        if (win) win.webContents.send('tokens:update', tk);
       } catch (_) { /* don't break the cycle */ }
     }
     if (getSettings().source === 'statusline') {
@@ -269,6 +317,7 @@ async function poll() {
       // statusLine hook). No network, so no breaker/backoff concerns.
       try {
         const usage = readStatusline(app.getPath('userData'));
+        usage.pace = computePace(usage);
         lastGood = usage;
         lastError = null;
         if (win) win.webContents.send('usage:update', usage);
@@ -276,6 +325,7 @@ async function poll() {
       } catch (err) {
         lastError = { message: err.message, expired: !!err.expired, at: Date.now(), last: lastGood };
         if (win) win.webContents.send('usage:error', lastError);
+        updateTrayTitleStale();
       }
       scheduleNext(POLL_ACTIVE_MS);
       return;
@@ -289,6 +339,7 @@ async function poll() {
     }
     try {
       const usage = await fetchUsage();
+      usage.pace = computePace(usage);
       lastGood = usage;
       lastError = null;
       rlBackoff = 0;   // recovered: reset the rate-limit backoff
@@ -315,6 +366,7 @@ async function poll() {
         unavailable: tripped, at: Date.now(), last: lastGood,
       };
       if (win) win.webContents.send('usage:error', lastError);
+      updateTrayTitleStale();
       if (err && err.noCredential) {
         // API-key / Console account: a steady state, not an outage. Poll at the
         // calm cadence — the credential watcher re-polls instantly if a
@@ -406,11 +458,26 @@ function unwatchStatusline() {
 }
 
 // ---- Tray ----
-function updateTrayTitle(usage) {
+function updateTrayTitle(usage, staleWord) {
   if (!tray) return;
   const five = usage && usage.fiveHour ? usage.fiveHour.utilization + '%' : '--';
   const seven = usage && usage.sevenDay ? usage.sevenDay.utilization + '%' : '--';
-  tray.setToolTip(`Count Claudula · 5h ${five} · 7d ${seven}`);
+  // "5h"/"7d" are language-neutral unit tokens (matching the collapsed pill)
+  tray.setToolTip(`Count Claudula · 5h ${five} · 7d ${seven}` + (staleWord ? ` · ${staleWord}` : ''));
+}
+
+// A fetch failed: never present the last numbers as live. Reuse the localized
+// status word the widget footer shows for the same state.
+function updateTrayTitleStale() {
+  if (!tray) return;
+  const L = effectiveLocale();
+  const e = lastError || {};
+  const word = e.expired ? i18n.t(L, 'expired')
+    : e.noCredential ? i18n.t(L, 'nocred')
+    : e.unavailable ? i18n.t(L, 'unavailable')
+    : i18n.t(L, 'offline');
+  if (lastGood) updateTrayTitle(lastGood, word);
+  else tray.setToolTip('Count Claudula · ' + word);
 }
 
 function rebuildTrayMenu() {
@@ -419,6 +486,9 @@ function rebuildTrayMenu() {
   const items = [
     { label: i18n.t(L, 'tray_showhide'), click: toggleWindow },
     { label: i18n.t(L, 'tray_expand'), click: expandPanel },
+    // full-word entry point to the detailed pane — the widget's own ⊞ glyph is
+    // easy to miss, and menus carry translated labels at any length
+    { label: i18n.t(L, mode === 'extended' ? 't_simple' : 't_detailed'), click: toggleMode },
     { label: i18n.t(L, 'tray_refresh'), click: pollNow },
     { label: i18n.t(L, 'tray_settings'), click: openSettings },
     { label: i18n.t(L, 'set_donate'), click: () => shell.openExternal(DONATE_URL) },
@@ -436,7 +506,7 @@ function rebuildTrayMenu() {
 function updateUiState() {
   if (updateReady) return { state: 'ready', version: updateVersion };
   if (updateDownloading) return { state: 'downloading', version: updateVersion, percent: updateProgress };
-  if (updateAvailable) return { state: 'available', version: updateVersion };
+  if (updateAvailable && !updateSnoozed) return { state: 'available', version: updateVersion };
   return { state: 'none' };
 }
 // Keep both surfaces in sync. Download progress skips the tray rebuild —
@@ -447,6 +517,7 @@ function syncUpdateUi(progressOnly) {
 }
 function startUpdateDownload() {
   if (!updateAvailable || updateDownloading || updateReady) return;
+  updateSnoozed = false; // an explicit download un-snoozes the banner (shows progress)
   updateDownloading = true;
   updateProgress = 0;
   syncUpdateUi();
@@ -473,6 +544,8 @@ function setupUpdater() {
   autoUpdater.on('update-available', (info) => {
     updateAvailable = true;
     updateVersion = (info && info.version) || '';
+    // a dismissed version stays out of the banner (the tray still offers it)
+    updateSnoozed = !!updateVersion && updateVersion === loadState().snoozedVersion;
     syncUpdateUi();
   });
   // e.g. a yanked release: stop offering a download that would just fail
@@ -558,6 +631,13 @@ ipcMain.on('ui:extmore', (_e, v) => setExtMore(!!v));
 ipcMain.on('ui:height', (_e, h) => setExtHeight(h));
 ipcMain.on('ui:update-download', startUpdateDownload);
 ipcMain.on('ui:update-restart', installUpdate);
+ipcMain.on('ui:update-dismiss', () => {
+  // banner-only snooze for this version — the tray menu keeps offering it
+  if (!updateAvailable || updateDownloading || updateReady) return;
+  saveState({ snoozedVersion: updateVersion });
+  updateSnoozed = true;
+  syncUpdateUi();
+});
 ipcMain.on('ui:settings', openSettings);
 ipcMain.on('ui:donate', () => shell.openExternal(DONATE_URL));
 ipcMain.on('ui:hide', () => { if (win) win.hide(); });
@@ -588,6 +668,7 @@ ipcMain.on('settings:set', (_e, payload) => {
   if (k === 'source') {
     if (v === 'statusline') ensureCaptureScript(app.getPath('userData'));
     watchStatusline(); // attaches or detaches per the new source
+    paceSamples = [];  // the two sources have incompatible timelines (Date.now vs capture time)
     pollNow();
   }
 });

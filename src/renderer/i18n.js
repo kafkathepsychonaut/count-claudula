@@ -366,20 +366,6 @@
   };
   for (const k in LESS) if (DICT[k]) DICT[k].t_less = LESS[k];
 
-  const LIMITS_TITLE = {
-    en: 'model limits', es: 'límites por modelo', pt: 'limites por modelo', fr: 'limites par modèle',
-    de: 'Limits pro Modell', it: 'limiti per modello', nl: 'limieten per model', pl: 'limity wg modelu',
-    ru: 'лимиты по моделям', uk: 'ліміти за моделями', cs: 'limity podle modelu', sk: 'limity podľa modelu',
-    ro: 'limite per model', hu: 'modellenkénti limitek', el: 'όρια ανά μοντέλο', sv: 'gränser per modell',
-    da: 'grænser pr. model', fi: 'mallikohtaiset rajat', nb: 'grenser per modell', tr: 'modele göre limitler',
-    ca: 'límits per model', bg: 'лимити по модел', hr: 'limiti po modelu', sr: 'лимити по моделу',
-    lt: 'limitai pagal modelį', ja: 'モデル別の上限', ko: '모델별 한도', zh: '按模型限额',
-    vi: 'giới hạn theo mô hình', th: 'ลิมิตตามโมเดล', id: 'batas per model', ms: 'had mengikut model',
-    fil: 'limitasyon bawat model', hi: 'मॉडल अनुसार सीमाएँ', ar: 'حدود حسب النموذج', he: 'מגבלות לפי מודל',
-    fa: 'محدودیت به تفکیک مدل',
-  };
-  for (const k in LIMITS_TITLE) if (DICT[k]) DICT[k].limits_title = LIMITS_TITLE[k];
-
   const AVG7 = {
     en: 'avg / day (7d)', es: 'media/día (7d)', pt: 'média/dia (7d)', fr: 'moy./jour (7j)',
     de: 'Ø/Tag (7T)', it: 'media/giorno (7g)', nl: 'gem./dag (7d)', pl: 'śr./dzień (7d)',
@@ -571,6 +557,339 @@
     fa: 'این فرمان را به عنوان statusLine در Claude Code استفاده کنید (settings.json). داده‌ها فقط هنگام اجرای Claude Code تازه می‌شوند.',
   };
   for (const k in SOURCE_HINT) if (DICT[k]) DICT[k].source_hint = SOURCE_HINT[k];
+
+
+  // ---- v1.3.0 keys (grouped pane, pace hint, honest notes) ----
+  // tooltip on the API-value row (subscription accounts)
+  const EQUIV_COST_HINT = {
+    en: "what today’s usage would cost at API prices — covered by your subscription, not billed separately",
+    es: "lo que costaría el uso de hoy a precios de API — cubierto por tu suscripción, no se factura aparte",
+    pt: "o que o uso de hoje custaria a preços de API — coberto pela sua assinatura, sem cobrança separada",
+    fr: "ce que l'usage d'aujourd'hui coûterait au tarif API — couvert par votre abonnement, sans facturation séparée",
+    de: "was die heutige Nutzung zu API-Preisen kosten würde — durch Ihr Abo abgedeckt, nicht separat abgerechnet",
+    it: "quanto costerebbe l'uso di oggi a prezzi API — coperto dal tuo abbonamento, senza addebito separato",
+    nl: "wat het gebruik van vandaag tegen API-prijzen zou kosten — gedekt door je abonnement, niet apart gefactureerd",
+    pl: "ile dzisiejsze zużycie kosztowałoby po cenach API — pokryte subskrypcją, bez osobnego rozliczenia",
+    ru: "сколько сегодняшнее использование стоило бы по ценам API — покрывается вашей подпиской, отдельно не оплачивается",
+    uk: "скільки сьогоднішнє використання коштувало б за цінами API — покривається вашою підпискою, окремо не оплачується",
+    cs: "kolik by dnešní využití stálo v cenách API — kryto předplatným, neúčtuje se zvlášť",
+    sk: "koľko by dnešné využitie stálo v cenách API — kryté predplatným, neúčtuje sa zvlášť",
+    ro: "cât ar costa utilizarea de azi la prețuri API — acoperit de abonamentul tău, fără facturare separată",
+    hu: "mennyibe kerülne a mai használat API-árakon — az előfizetésed fedezi, nem számlázzák külön",
+    el: "τι θα κόστιζε η σημερινή χρήση σε τιμές API — καλύπτεται από τη συνδρομή σου, δεν χρεώνεται ξεχωριστά",
+    sv: "vad dagens användning skulle kosta till API-priser — täcks av din prenumeration, faktureras inte separat",
+    da: "hvad dagens forbrug ville koste til API-priser — dækket af dit abonnement, faktureres ikke separat",
+    fi: "mitä tämän päivän käyttö maksaisi API-hinnoilla — kuuluu tilaukseesi, ei laskuteta erikseen",
+    nb: "hva dagens bruk ville kostet til API-priser — dekkes av abonnementet ditt, faktureres ikke separat",
+    tr: "bugünkü kullanımın API fiyatlarıyla maliyeti — aboneliğinize dahil, ayrıca faturalandırılmaz",
+    ca: "el que costaria l'ús d'avui a preus d'API — cobert per la teva subscripció, sense facturació a part",
+    bg: "колко би струвало днешното използване по цените на API — покрито от абонамента ви, не се таксува отделно",
+    hr: "koliko bi današnja potrošnja koštala po API cijenama — pokriveno tvojom pretplatom, ne naplaćuje se posebno",
+    sr: "колико би данашња потрошња коштала по API ценама — покривено твојом претплатом, не наплаћује се посебно",
+    lt: "kiek šiandienos naudojimas kainuotų API kainomis — tai dengia jūsų prenumerata, atskirai neapmokestinama",
+    ja: "今日の使用量をAPI価格で換算した金額です。サブスクリプションに含まれるため、別途請求はされません。",
+    ko: "오늘 사용량을 API 가격으로 환산한 금액입니다. 구독에 포함되어 있어 별도로 청구되지 않습니다.", zh: "今日用量按 API 价格折算的费用——已包含在你的订阅中，不会另行计费。",
+    vi: "Chi phí của mức dùng hôm nay nếu tính theo giá API — đã bao gồm trong gói đăng ký, không bị tính phí riêng.",
+    th: "มูลค่าการใช้งานวันนี้หากคิดตามราคา API — รวมอยู่ในแผนสมาชิกของคุณแล้ว ไม่เรียกเก็บแยก",
+    id: "biaya pemakaian hari ini jika dihitung dengan harga API — sudah dicakup langganan Anda, tidak ditagih terpisah",
+    ms: "kos penggunaan hari ini jika dikira pada harga API — sudah ditanggung oleh langganan anda, tidak dicaj berasingan",
+    fil: "kung magkano sana ang paggamit ngayong araw sa presyo ng API — sakop na ng subscription mo, hindi na sinisingil nang hiwalay",
+    hi: "आज के उपयोग की API कीमतों पर अनुमानित लागत — आपकी सदस्यता में शामिल, अलग से बिल नहीं होगी।",
+    ar: "ما كان سيكلّفه استخدام اليوم بأسعار API — يغطيه اشتراكك ولا يُفوتَر بشكل منفصل",
+    he: "כמה השימוש של היום היה עולה במחירי API — מכוסה במנוי שלך ולא מחויב בנפרד",
+    fa: "هزینه مصرف امروز اگر به قیمت API محاسبه می‌شد — تحت پوشش اشتراک شماست و جداگانه صورتحساب نمی‌شود",
+  };
+  for (const k in EQUIV_COST_HINT) if (DICT[k]) DICT[k].equiv_cost_hint = EQUIV_COST_HINT[k];
+
+  // same tooltip for API-key/Console accounts (no "covered by your plan" claim — they ARE billed)
+  const EQUIV_COST_HINT_API = {
+    en: "what today’s usage would cost at API prices", es: "lo que costaría el uso de hoy a precios de API",
+    pt: "o que o uso de hoje custaria a preços de API",
+    fr: "ce que l'usage d'aujourd'hui coûterait au tarif API",
+    de: "was die heutige Nutzung zu API-Preisen kosten würde",
+    it: "quanto costerebbe l'uso di oggi a prezzi API",
+    nl: "wat het gebruik van vandaag tegen API-prijzen zou kosten",
+    pl: "ile dzisiejsze zużycie kosztowałoby po cenach API",
+    ru: "сколько сегодняшнее использование стоило бы по ценам API",
+    uk: "скільки сьогоднішнє використання коштувало б за цінами API",
+    cs: "kolik by dnešní využití stálo v cenách API", sk: "koľko by dnešné využitie stálo v cenách API",
+    ro: "cât ar costa utilizarea de azi la prețuri API", hu: "mennyibe kerülne a mai használat API-árakon",
+    el: "τι θα κόστιζε η σημερινή χρήση σε τιμές API",
+    sv: "vad dagens användning skulle kosta till API-priser",
+    da: "hvad dagens forbrug ville koste til API-priser",
+    fi: "mitä tämän päivän käyttö maksaisi API-hinnoilla", nb: "hva dagens bruk ville kostet til API-priser",
+    tr: "bugünkü kullanımın API fiyatlarıyla maliyeti", ca: "el que costaria l'ús d'avui a preus d'API",
+    bg: "колко би струвало днешното използване по цените на API",
+    hr: "koliko bi današnja potrošnja koštala po API cijenama",
+    sr: "колико би данашња потрошња коштала по API ценама",
+    lt: "kiek šiandienos naudojimas kainuotų API kainomis", ja: "今日の使用量をAPI価格で換算した金額です。",
+    ko: "오늘 사용량을 API 가격으로 환산한 금액입니다.", zh: "今日用量按 API 价格折算的费用。",
+    vi: "Chi phí của mức dùng hôm nay nếu tính theo giá API.", th: "มูลค่าการใช้งานวันนี้หากคิดตามราคา API",
+    id: "biaya pemakaian hari ini jika dihitung dengan harga API",
+    ms: "kos penggunaan hari ini jika dikira pada harga API",
+    fil: "kung magkano sana ang paggamit ngayong araw sa presyo ng API",
+    hi: "आज के उपयोग की API कीमतों पर अनुमानित लागत।", ar: "ما كان سيكلّفه استخدام اليوم بأسعار API",
+    he: "כמה השימוש של היום היה עולה במחירי API", fa: "هزینه مصرف امروز اگر به قیمت API محاسبه می‌شد",
+  };
+  for (const k in EQUIV_COST_HINT_API) if (DICT[k]) DICT[k].equiv_cost_hint_api = EQUIV_COST_HINT_API[k];
+
+  // per-model split header (share of today’s cost)
+  const BY_MODEL = {
+    en: "by model", es: "por modelo", pt: "por modelo", fr: "par modèle", de: "nach Modell",
+    it: "per modello", nl: "per model", pl: "wg modelu", ru: "по моделям", uk: "за моделями",
+    cs: "podle modelu", sk: "podľa modelu", ro: "per model", hu: "modellenként", el: "ανά μοντέλο",
+    sv: "per modell", da: "pr. model", fi: "malleittain", nb: "per modell", tr: "modele göre",
+    ca: "per model", bg: "по модел", hr: "po modelu", sr: "по моделу", lt: "pagal modelį", ja: "モデル別",
+    ko: "모델별", zh: "按模型", vi: "theo mô hình", th: "ตามโมเดล", id: "per model", ms: "mengikut model",
+    fil: "bawat model", hi: "मॉडल अनुसार", ar: "حسب النموذج", he: "לפי מודל", fa: "به تفکیک مدل",
+  };
+  for (const k in BY_MODEL) if (DICT[k]) DICT[k].by_model = BY_MODEL[k];
+
+  // per-project split header (top projects today)
+  const BY_PROJECT = {
+    en: "by project", es: "por proyecto", pt: "por projeto", fr: "par projet", de: "nach Projekt",
+    it: "per progetto", nl: "per project", pl: "wg projektu", ru: "по проектам", uk: "за проєктами",
+    cs: "podle projektu", sk: "podľa projektu", ro: "per proiect", hu: "projektenként", el: "ανά έργο",
+    sv: "per projekt", da: "pr. projekt", fi: "projekteittain", nb: "per prosjekt", tr: "projeye göre",
+    ca: "per projecte", bg: "по проект", hr: "po projektu", sr: "по пројекту", lt: "pagal projektą",
+    ja: "プロジェクト別", ko: "프로젝트별", zh: "按项目", vi: "theo dự án", th: "ตามโปรเจกต์", id: "per proyek",
+    ms: "mengikut projek", fil: "bawat proyekto", hi: "प्रोजेक्ट अनुसार", ar: "حسب المشروع", he: "לפי פרויקט",
+    fa: "به تفکیک پروژه",
+  };
+  for (const k in BY_PROJECT) if (DICT[k]) DICT[k].by_project = BY_PROJECT[k];
+
+  // token-counts group header
+  const TOKENS_TITLE = {
+    en: "tokens", es: "tokens", pt: "tokens", fr: "jetons", de: "Tokens", it: "token", nl: "tokens",
+    pl: "tokeny", ru: "токены", uk: "токени", cs: "tokeny", sk: "tokeny", ro: "tokenuri", hu: "tokenek",
+    el: "tokens", sv: "tokens", da: "tokens", fi: "tokenit", nb: "tokens", tr: "jetonlar", ca: "tokens",
+    bg: "токени", hr: "tokeni", sr: "токени", lt: "žetonai", ja: "トークン", ko: "토큰", zh: "令牌", vi: "token",
+    th: "โทเค็น", id: "token", ms: "token", fil: "mga token", hi: "टोकन", ar: "الرموز", he: "טוקנים",
+    fa: "توکن‌ها",
+  };
+  for (const k in TOKENS_TITLE) if (DICT[k]) DICT[k].tokens_title = TOKENS_TITLE[k];
+
+  // generic total row label
+  const TOTAL_LABEL = {
+    en: "total", es: "total", pt: "total", fr: "total", de: "gesamt", it: "totale", nl: "totaal", pl: "razem",
+    ru: "итого", uk: "разом", cs: "celkem", sk: "spolu", ro: "total", hu: "összesen", el: "σύνολο",
+    sv: "totalt", da: "i alt", fi: "yhteensä", nb: "totalt", tr: "toplam", ca: "total", bg: "общо",
+    hr: "ukupno", sr: "укупно", lt: "iš viso", ja: "合計", ko: "합계", zh: "总计", vi: "tổng", th: "รวม",
+    id: "total", ms: "jumlah", fil: "kabuuan", hi: "कुल", ar: "الإجمالي", he: "סה״כ", fa: "مجموع",
+  };
+  for (const k in TOTAL_LABEL) if (DICT[k]) DICT[k].total_label = TOTAL_LABEL[k];
+
+  // the local 7-day window EXCLUDES today — the header must say so (overrides the older "last 7 days")
+  const LAST7_V2 = {
+    en: "previous 7 days", es: "7 días anteriores", pt: "7 dias anteriores", fr: "7 jours précédents",
+    de: "vorherige 7 Tage", it: "7 giorni precedenti", nl: "vorige 7 dagen", pl: "poprzednie 7 dni",
+    ru: "предыдущие 7 дней", uk: "попередні 7 днів", cs: "předchozích 7 dní", sk: "predchádzajúcich 7 dní",
+    ro: "7 zile anterioare", hu: "előző 7 nap", el: "προηγούμενες 7 ημέρες", sv: "föregående 7 dagar",
+    da: "forrige 7 dage", fi: "edelliset 7 päivää", nb: "forrige 7 dager", tr: "önceki 7 gün",
+    ca: "7 dies anteriors", bg: "предходните 7 дни", hr: "prethodnih 7 dana", sr: "претходних 7 дана",
+    lt: "ankstesnės 7 dienos", ja: "前の7日間", ko: "이전 7일", zh: "之前 7 天", vi: "7 ngày trước đó",
+    th: "7 วันก่อนหน้า", id: "7 hari sebelumnya", ms: "7 hari sebelumnya", fil: "naunang 7 araw",
+    hi: "पहले के 7 दिन", ar: "الأيام الـ7 السابقة", he: "7 הימים הקודמים", fa: "۷ روز پیشین",
+  };
+  for (const k in LAST7_V2) if (DICT[k]) DICT[k].last_7d = LAST7_V2[k];
+
+  // tooltip stating the savings baseline — the figure is NET (reads save, write premiums cost)
+  const CACHE_SAVINGS_HINT = {
+    en: "net effect of caching vs paying full input price: reads save money, cache writes cost a premium — already reflected in the total",
+    es: "efecto neto de la caché frente a pagar el precio completo de entrada: las lecturas ahorran dinero, las escrituras en caché tienen un recargo — ya reflejado en el total",
+    pt: "efeito líquido do cache em vez de pagar o preço cheio de entrada: leituras economizam dinheiro, escritas em cache custam um adicional — já refletido no total",
+    fr: "effet net du cache par rapport au plein tarif d'entrée : les lectures font économiser, les écritures en cache coûtent un supplément — déjà pris en compte dans le total",
+    de: "Nettoeffekt des Cachings gegenüber dem vollen Eingabepreis: Lesevorgänge sparen Geld, Cache-Schreibvorgänge kosten einen Aufpreis — bereits im Gesamtbetrag enthalten",
+    it: "effetto netto della cache rispetto al prezzo pieno di input: le letture fanno risparmiare, le scritture in cache costano un sovrapprezzo — già incluso nel totale",
+    nl: "netto-effect van caching versus de volledige invoerprijs: lezen bespaart geld, schrijven naar de cache kost extra — al verwerkt in het totaal",
+    pl: "efekt netto cache'owania względem pełnej ceny wejścia: odczyty oszczędzają pieniądze, zapisy do cache kosztują dodatkowo — już uwzględnione w sumie",
+    ru: "чистый эффект кэширования по сравнению с полной ценой ввода: чтения экономят деньги, записи в кэш обходятся с наценкой — уже учтено в итоге",
+    uk: "чистий ефект кешування порівняно з повною ціною вводу: читання економлять гроші, записи в кеш обходяться з надбавкою — вже враховано в підсумку",
+    cs: "čistý efekt cache oproti plné ceně vstupu: čtení šetří peníze, zápisy do cache stojí příplatek — již zahrnuto v součtu",
+    sk: "čistý efekt cache oproti plnej cene vstupu: čítanie šetrí peniaze, zápisy do cache stoja príplatok — už zahrnuté v súčte",
+    ro: "efectul net al cache-ului față de plata prețului întreg de intrare: citirile economisesc bani, scrierile în cache costă un supliment — deja inclus în total",
+    hu: "a gyorsítótárazás nettó hatása a teljes bemeneti árhoz képest: az olvasás pénzt spórol, a gyorsítótár-írás felárba kerül — az összeg már tartalmazza",
+    el: "καθαρό αποτέλεσμα του caching έναντι της πλήρους τιμής εισόδου: οι αναγνώσεις εξοικονομούν χρήματα, οι εγγραφές cache κοστίζουν επιπλέον — ήδη συνυπολογισμένο στο σύνολο",
+    sv: "nettoeffekten av cachning jämfört med fullt indatapris: läsningar sparar pengar, cacheskrivningar kostar extra — redan inräknat i totalsumman",
+    da: "nettoeffekten af caching i forhold til fuld inputpris: læsninger sparer penge, cacheskrivninger koster ekstra — allerede medregnet i totalen",
+    fi: "välimuistin nettovaikutus verrattuna täyteen syötehintaan: lukeminen säästää rahaa, välimuistiin kirjoittaminen maksaa lisähintaa — sisältyy jo kokonaissummaan",
+    nb: "nettoeffekten av caching sammenlignet med full inndatapris: lesinger sparer penger, cache-skrivinger koster ekstra — allerede medregnet i totalen",
+    tr: "önbelleklemenin tam giriş fiyatına kıyasla net etkisi: okumalar tasarruf sağlar, önbelleğe yazmalar ek ücret getirir — toplama zaten dahil",
+    ca: "efecte net de la memòria cau respecte a pagar el preu complet d'entrada: les lectures estalvien diners, les escriptures a la memòria cau tenen un sobrecost — ja reflectit al total",
+    bg: "нетен ефект от кеширането спрямо пълната цена на входа: четенията пестят пари, записите в кеша струват с надценка — вече отразено в общата сума",
+    hr: "neto učinak cachea u odnosu na punu cijenu ulaza: čitanja štede novac, upisi u cache koštaju više — već uključeno u ukupni iznos",
+    sr: "нето ефекат кеширања у односу на пуну цену улаза: читања штеде новац, уписи у кеш коштају више — већ укључено у укупан износ",
+    lt: "grynasis talpyklos efektas, palyginti su visa įvesties kaina: skaitymai taupo pinigus, įrašymai į talpyklą kainuoja brangiau — jau įskaičiuota į bendrą sumą",
+    ja: "通常の入力価格で支払う場合と比べたキャッシュの正味の効果です。読み取りは節約になり、キャッシュ書き込みには割増コストがかかります。合計にはすでに反映されています。",
+    ko: "정가 입력 가격을 지불하는 경우와 비교한 캐시의 순효과입니다. 읽기는 비용을 절약하고 캐시 쓰기는 할증 비용이 듭니다. 합계에 이미 반영되어 있습니다.",
+    zh: "缓存相对于按完整输入价格付费的净效果：读取省钱，缓存写入则需支付溢价——已体现在总计中。",
+    vi: "hiệu quả ròng của cache so với việc trả giá đầu vào đầy đủ: đọc cache giúp tiết kiệm, ghi cache chịu thêm phụ phí — đã được phản ánh trong tổng",
+    th: "ผลสุทธิของการใช้แคชเทียบกับการจ่ายราคาอินพุตเต็มจำนวน: การอ่านช่วยประหยัด ส่วนการเขียนแคชมีค่าใช้จ่ายเพิ่ม — สะท้อนอยู่ในยอดรวมแล้ว",
+    id: "efek bersih caching dibandingkan membayar harga input penuh: pembacaan cache menghemat biaya, penulisan cache dikenai biaya tambahan — sudah tercermin dalam total",
+    ms: "kesan bersih caching berbanding membayar harga input penuh: bacaan cache menjimatkan kos, penulisan cache dikenakan caj tambahan — sudah diambil kira dalam jumlah",
+    fil: "netong epekto ng caching kumpara sa pagbabayad ng buong presyo ng input: nakakatipid ang mga cache read, may dagdag na bayad ang mga cache write — kasama na sa kabuuan",
+    hi: "पूर्ण इनपुट कीमत चुकाने की तुलना में कैशिंग का शुद्ध प्रभाव: कैश रीड से पैसे बचते हैं, कैश राइट पर अतिरिक्त लागत लगती है — कुल में पहले से शामिल।",
+    ar: "الأثر الصافي للتخزين المؤقت مقارنةً بدفع سعر الإدخال الكامل: القراءات توفّر المال بينما تكلّف الكتابة في الذاكرة المؤقتة علاوة — محتسب بالفعل في الإجمالي",
+    he: "ההשפעה נטו של המטמון לעומת תשלום מחיר קלט מלא: קריאות חוסכות כסף, כתיבות למטמון כרוכות בתוספת מחיר — כבר כלול בסה״כ",
+    fa: "اثر خالص کش در مقایسه با پرداخت قیمت کامل ورودی: خواندن‌ها پول صرفه‌جویی می‌کنند، نوشتن در کش هزینه اضافه دارد — از قبل در مجموع لحاظ شده",
+  };
+  for (const k in CACHE_SAVINGS_HINT) if (DICT[k]) DICT[k].cache_savings_hint = CACHE_SAVINGS_HINT[k];
+
+  // first-run empty state for the token pane
+  const NO_DATA = {
+    en: "no Claude Code activity found yet", es: "aún sin actividad de Claude Code",
+    pt: "ainda sem atividade do Claude Code", fr: "aucune activité Claude Code pour l'instant",
+    de: "noch keine Claude-Code-Aktivität gefunden", it: "ancora nessuna attività di Claude Code",
+    nl: "nog geen Claude Code-activiteit gevonden", pl: "nie znaleziono jeszcze aktywności Claude Code",
+    ru: "активность Claude Code пока не найдена", uk: "активності Claude Code поки не знайдено",
+    cs: "zatím žádná aktivita Claude Code", sk: "zatiaľ žiadna aktivita Claude Code",
+    ro: "încă nicio activitate Claude Code", hu: "még nincs Claude Code-aktivitás",
+    el: "δεν βρέθηκε ακόμη δραστηριότητα Claude Code", sv: "ingen Claude Code-aktivitet hittad ännu",
+    da: "ingen Claude Code-aktivitet fundet endnu", fi: "Claude Code -toimintaa ei vielä löytynyt",
+    nb: "ingen Claude Code-aktivitet funnet ennå", tr: "henüz Claude Code etkinliği bulunamadı",
+    ca: "encara no hi ha activitat de Claude Code", bg: "все още няма активност на Claude Code",
+    hr: "još nema aktivnosti Claude Codea", sr: "још нема активности Claude Code-а",
+    lt: "Claude Code veiklos kol kas nerasta", ja: "まだ Claude Code のアクティビティがありません",
+    ko: "아직 Claude Code 활동이 없습니다", zh: "尚未发现 Claude Code 活动", vi: "chưa thấy hoạt động Claude Code nào",
+    th: "ยังไม่พบการใช้งาน Claude Code", id: "belum ada aktivitas Claude Code yang ditemukan",
+    ms: "belum ada aktiviti Claude Code dijumpai", fil: "wala pang nakitang aktibidad ng Claude Code",
+    hi: "अभी तक कोई Claude Code गतिविधि नहीं मिली", ar: "لم يُعثر على أي نشاط لـ Claude Code بعد",
+    he: "עדיין לא נמצאה פעילות Claude Code", fa: "هنوز فعالیتی از Claude Code یافت نشده",
+  };
+  for (const k in NO_DATA) if (DICT[k]) DICT[k].no_data = NO_DATA[k];
+
+  // tooltip on the burn-rate hint next to the 5h countdown
+  const PACE_HINT = {
+    en: "estimated pace — highlighted when the limit would be reached before the reset",
+    es: "ritmo estimado — se resalta cuando el límite se alcanzaría antes del reinicio",
+    pt: "ritmo estimado — destacado quando o limite seria atingido antes do reset",
+    fr: "rythme estimé — mis en évidence quand la limite serait atteinte avant la réinitialisation",
+    de: "geschätztes Tempo — hervorgehoben, wenn das Limit vor dem Reset erreicht würde",
+    it: "ritmo stimato — evidenziato quando il limite verrebbe raggiunto prima del reset",
+    nl: "geschat tempo — gemarkeerd wanneer de limiet vóór de reset bereikt zou worden",
+    pl: "szacowane tempo — wyróżnione, gdy limit zostałby osiągnięty przed resetem",
+    ru: "расчётный темп — подсвечивается, если лимит будет исчерпан до сброса",
+    uk: "розрахунковий темп — підсвічується, якщо ліміт буде вичерпано до скидання",
+    cs: "odhadované tempo — zvýrazněno, pokud by byl limit dosažen před resetem",
+    sk: "odhadované tempo — zvýraznené, ak by sa limit dosiahol pred resetom",
+    ro: "ritm estimat — evidențiat când limita ar fi atinsă înainte de resetare",
+    hu: "becsült tempó — kiemelve, ha a limit még a visszaállítás előtt betelne",
+    el: "εκτιμώμενος ρυθμός — επισημαίνεται όταν το όριο θα εξαντληθεί πριν από την επαναφορά",
+    sv: "uppskattad takt — markeras när gränsen skulle nås före återställningen",
+    da: "anslået tempo — fremhæves, når grænsen ville blive nået inden nulstillingen",
+    fi: "arvioitu tahti — korostetaan, kun raja täyttyisi ennen nollausta",
+    nb: "anslått tempo — utheves når grensen ville blitt nådd før nullstillingen",
+    tr: "tahmini hız — limite sıfırlamadan önce ulaşılacaksa vurgulanır",
+    ca: "ritme estimat — es ressalta quan el límit s'assoliria abans del reinici",
+    bg: "прогнозно темпо — откроява се, когато лимитът би бил достигнат преди нулирането",
+    hr: "procijenjeni tempo — istaknuto kad bi limit bio dosegnut prije reseta",
+    sr: "процењени темпо — истакнуто кад би лимит био достигнут пре ресета",
+    lt: "numatomas tempas — paryškinama, jei limitas būtų pasiektas iki atstatymo",
+    ja: "推定ペースです。リセット前に上限へ達する見込みのときに強調表示されます。", ko: "예상 사용 속도입니다. 초기화 전에 한도에 도달할 것으로 보이면 강조 표시됩니다.",
+    zh: "预计使用速度——若将在重置前达到限额则会高亮显示。",
+    vi: "Tốc độ dùng ước tính — được tô nổi bật khi dự kiến chạm giới hạn trước lúc đặt lại.",
+    th: "อัตราการใช้โดยประมาณ — จะถูกเน้นเมื่อคาดว่าจะถึงลิมิตก่อนการรีเซ็ต",
+    id: "perkiraan laju pemakaian — disorot bila batas akan tercapai sebelum reset",
+    ms: "anggaran kadar penggunaan — diserlahkan jika had akan dicapai sebelum set semula",
+    fil: "tinatayang bilis ng paggamit — naka-highlight kapag maaabot ang limitasyon bago ang reset",
+    hi: "अनुमानित गति — यदि रीसेट से पहले सीमा तक पहुँचने का अनुमान हो तो हाइलाइट होती है।",
+    ar: "الوتيرة المقدّرة — تُبرَز عندما يُتوقّع بلوغ الحد قبل إعادة الضبط",
+    he: "קצב משוער — מודגש כשצפוי להגיע למגבלה לפני האיפוס",
+    fa: "سرعت تخمینی مصرف — وقتی حد پیش از بازنشانی پر شود برجسته می‌شود",
+  };
+  for (const k in PACE_HINT) if (DICT[k]) DICT[k].pace_hint = PACE_HINT[k];
+
+  // second-click confirmation for update-and-restart
+  const UPDATE_CONFIRM = {
+    en: "click again to confirm", es: "pulsa otra vez para confirmar", pt: "clique de novo para confirmar",
+    fr: "cliquez encore pour confirmer", de: "erneut klicken zum Bestätigen",
+    it: "premi di nuovo per confermare", nl: "klik nogmaals om te bevestigen",
+    pl: "kliknij ponownie, aby potwierdzić", ru: "нажмите ещё раз для подтверждения",
+    uk: "натисніть ще раз для підтвердження", cs: "klikněte znovu pro potvrzení",
+    sk: "kliknite znova na potvrdenie", ro: "apasă din nou pentru a confirma",
+    hu: "kattints újra a megerősítéshez", el: "πάτησε ξανά για επιβεβαίωση",
+    sv: "klicka igen för att bekräfta", da: "klik igen for at bekræfte", fi: "vahvista painamalla uudelleen",
+    nb: "klikk igjen for å bekrefte", tr: "onaylamak için tekrar tıklayın",
+    ca: "torna a prémer per confirmar", bg: "натиснете отново за потвърждение",
+    hr: "klikni ponovno za potvrdu", sr: "кликни поново за потврду",
+    lt: "spustelėkite dar kartą, kad patvirtintumėte", ja: "もう一度クリックで確定", ko: "한 번 더 클릭해 확인", zh: "再次点击确认",
+    vi: "Nhấn lần nữa để xác nhận", th: "คลิกอีกครั้งเพื่อยืนยัน", id: "klik lagi untuk konfirmasi",
+    ms: "klik lagi untuk mengesahkan", fil: "i-click muli para kumpirmahin",
+    hi: "पुष्टि के लिए फिर क्लिक करें", ar: "انقر مرة أخرى للتأكيد", he: "לחצו שוב לאישור",
+    fa: "برای تأیید دوباره کلیک کنید",
+  };
+  for (const k in UPDATE_CONFIRM) if (DICT[k]) DICT[k].update_confirm = UPDATE_CONFIRM[k];
+
+  // scope-only footnote: pricing explanation moved to the tooltip on the value itself (overrides the old three-clause note)
+  const COST_NOTE_V2 = {
+    en: "Claude Code (CLI) only", es: "solo Claude Code (CLI)", pt: "só Claude Code (CLI)",
+    fr: "Claude Code (CLI) uniquement", de: "nur Claude Code (CLI)", it: "solo Claude Code (CLI)",
+    nl: "alleen Claude Code (CLI)", pl: "tylko Claude Code (CLI)", ru: "только Claude Code (CLI)",
+    uk: "лише Claude Code (CLI)", cs: "jen Claude Code (CLI)", sk: "len Claude Code (CLI)",
+    ro: "doar Claude Code (CLI)", hu: "csak Claude Code (CLI)", el: "μόνο Claude Code (CLI)",
+    sv: "endast Claude Code (CLI)", da: "kun Claude Code (CLI)", fi: "vain Claude Code (CLI)",
+    nb: "kun Claude Code (CLI)", tr: "yalnızca Claude Code (CLI)", ca: "només Claude Code (CLI)",
+    bg: "само Claude Code (CLI)", hr: "samo Claude Code (CLI)", sr: "само Claude Code (CLI)",
+    lt: "tik Claude Code (CLI)", ja: "Claude Code (CLI) のみ", ko: "Claude Code (CLI) 전용",
+    zh: "仅 Claude Code (CLI)", vi: "chỉ Claude Code (CLI)", th: "เฉพาะ Claude Code (CLI)",
+    id: "hanya Claude Code (CLI)", ms: "hanya Claude Code (CLI)", fil: "Claude Code (CLI) lang",
+    hi: "केवल Claude Code (CLI)", ar: "Claude Code (CLI) فقط", he: "רק Claude Code (CLI)",
+    fa: "فقط Claude Code (CLI)",
+  };
+  for (const k in COST_NOTE_V2) if (DICT[k]) DICT[k].cost_note = COST_NOTE_V2[k];
+
+  // the settings-window ToS/credential disclaimer — the one paragraph where reading comprehension matters most, so it is translated like everything else
+  const DISCLAIMER = {
+    en: "Reads your local Claude credential to query an undocumented Anthropic endpoint; this may be against Anthropic’s Terms — use at your own risk. Not affiliated with or endorsed by Anthropic. Claude™ and Claude Code™ are trademarks of Anthropic, PBC.",
+    es: "Lee tu credencial local de Claude para consultar un endpoint no documentado de Anthropic; esto puede ir contra los Términos de Anthropic — úsalo bajo tu propio riesgo. Sin afiliación ni respaldo de Anthropic. Claude™ y Claude Code™ son marcas comerciales de Anthropic, PBC.",
+    pt: "Lê sua credencial local do Claude para consultar um endpoint não documentado da Anthropic; isso pode violar os Termos da Anthropic — use por sua conta e risco. Sem afiliação ou endosso da Anthropic. Claude™ e Claude Code™ são marcas registradas da Anthropic, PBC.",
+    fr: "Lit vos identifiants Claude locaux pour interroger un point d'accès Anthropic non documenté ; cela peut enfreindre les conditions d'Anthropic — utilisez-le à vos risques et périls. Sans affiliation ni approbation d'Anthropic. Claude™ et Claude Code™ sont des marques d'Anthropic, PBC.",
+    de: "Liest Ihre lokalen Claude-Anmeldedaten, um einen undokumentierten Anthropic-Endpunkt abzufragen; das kann gegen die Nutzungsbedingungen von Anthropic verstoßen — Nutzung auf eigenes Risiko. Nicht mit Anthropic verbunden oder von Anthropic unterstützt. Claude™ und Claude Code™ sind Marken von Anthropic, PBC.",
+    it: "Legge la tua credenziale locale di Claude per interrogare un endpoint non documentato di Anthropic; ciò potrebbe violare i Termini di Anthropic — usalo a tuo rischio. Non affiliato né approvato da Anthropic. Claude™ e Claude Code™ sono marchi di Anthropic, PBC.",
+    nl: "Leest je lokale Claude-inloggegevens om een niet-gedocumenteerd Anthropic-endpoint te bevragen; dit kan in strijd zijn met de voorwaarden van Anthropic — gebruik op eigen risico. Niet verbonden met of goedgekeurd door Anthropic. Claude™ en Claude Code™ zijn handelsmerken van Anthropic, PBC.",
+    pl: "Odczytuje lokalne dane logowania Claude, aby odpytywać nieudokumentowany endpoint Anthropic; może to naruszać warunki Anthropic — używasz na własne ryzyko. Projekt niepowiązany z Anthropic i przez nią niezatwierdzony. Claude™ i Claude Code™ są znakami towarowymi Anthropic, PBC.",
+    ru: "Считывает локальные учётные данные Claude, чтобы обращаться к недокументированному эндпоинту Anthropic; это может противоречить условиям Anthropic — используйте на свой страх и риск. Не связано с Anthropic и не одобрено ею. Claude™ и Claude Code™ — товарные знаки Anthropic, PBC.",
+    uk: "Зчитує локальні облікові дані Claude, щоб звертатися до недокументованого ендпоінта Anthropic; це може суперечити умовам Anthropic — використовуйте на власний ризик. Не пов'язано з Anthropic і не схвалено нею. Claude™ і Claude Code™ — торговельні марки Anthropic, PBC.",
+    cs: "Čte vaše místní přihlašovací údaje Claude a dotazuje se nedokumentovaného endpointu Anthropic; může to porušovat podmínky Anthropic — používejte na vlastní riziko. Není spojeno s Anthropic ani jí schváleno. Claude™ a Claude Code™ jsou ochranné známky Anthropic, PBC.",
+    sk: "Číta vaše lokálne prihlasovacie údaje Claude a dopytuje sa nedokumentovaného endpointu Anthropic; môže to porušovať podmienky Anthropic — používajte na vlastné riziko. Nie je spojené s Anthropic ani ňou schválené. Claude™ a Claude Code™ sú ochranné známky Anthropic, PBC.",
+    ro: "Citește credențialul local Claude pentru a interoga un endpoint Anthropic nedocumentat; acest lucru poate încălca Termenii Anthropic — folosește-l pe propriul risc. Fără afiliere sau aprobare din partea Anthropic. Claude™ și Claude Code™ sunt mărci comerciale ale Anthropic, PBC.",
+    hu: "A helyi Claude-hitelesítő adataidat olvassa egy nem dokumentált Anthropic-végpont lekérdezéséhez; ez sértheti az Anthropic feltételeit — használd saját felelősségedre. Nem áll kapcsolatban az Anthropic céggel, és az nem hagyta jóvá. A Claude™ és a Claude Code™ az Anthropic, PBC védjegyei.",
+    el: "Διαβάζει το τοπικό διαπιστευτήριο Claude για να στέλνει ερωτήματα σε ένα μη τεκμηριωμένο endpoint της Anthropic· αυτό ίσως αντιβαίνει στους Όρους της Anthropic — χρήση με δική σου ευθύνη. Δεν σχετίζεται με την Anthropic ούτε εγκρίνεται από αυτήν. Τα Claude™ και Claude Code™ είναι εμπορικά σήματα της Anthropic, PBC.",
+    sv: "Läser dina lokala Claude-inloggningsuppgifter för att anropa en odokumenterad Anthropic-endpoint; detta kan strida mot Anthropics villkor — använd på egen risk. Inte knuten till eller godkänd av Anthropic. Claude™ och Claude Code™ är varumärken som tillhör Anthropic, PBC.",
+    da: "Læser dine lokale Claude-loginoplysninger for at forespørge et udokumenteret Anthropic-endpoint; det kan være i strid med Anthropics vilkår — brug på eget ansvar. Ikke tilknyttet eller godkendt af Anthropic. Claude™ og Claude Code™ er varemærker tilhørende Anthropic, PBC.",
+    fi: "Lukee paikalliset Claude-kirjautumistietosi ja tekee kyselyjä dokumentoimattomaan Anthropicin päätepisteeseen; tämä voi rikkoa Anthropicin käyttöehtoja — käytä omalla vastuullasi. Ei liity Anthropiciin eikä ole sen hyväksymä. Claude™ ja Claude Code™ ovat Anthropic, PBC:n tavaramerkkejä.",
+    nb: "Leser din lokale Claude-pålogging for å spørre et udokumentert Anthropic-endepunkt; dette kan være i strid med Anthropics vilkår — bruk på eget ansvar. Ikke tilknyttet eller godkjent av Anthropic. Claude™ og Claude Code™ er varemerker som tilhører Anthropic, PBC.",
+    tr: "Belgelenmemiş bir Anthropic uç noktasını sorgulamak için yerel Claude kimlik bilginizi okur; bu, Anthropic'in Koşullarına aykırı olabilir — kullanımı kendi sorumluluğunuzdadır. Anthropic ile bağlantılı değildir ve Anthropic tarafından onaylanmamıştır. Claude™ ve Claude Code™, Anthropic, PBC'nin ticari markalarıdır.",
+    ca: "Llegeix la teva credencial local de Claude per consultar un endpoint no documentat d'Anthropic; això pot anar contra els Termes d'Anthropic — fes-lo servir sota la teva responsabilitat. Sense afiliació ni aval d'Anthropic. Claude™ i Claude Code™ són marques d'Anthropic, PBC.",
+    bg: "Чете локалните ви данни за вход в Claude, за да запитва недокументиран ендпойнт на Anthropic; това може да противоречи на условията на Anthropic — използвайте на свой риск. Не е свързано с Anthropic и не е одобрено от нея. Claude™ и Claude Code™ са търговски марки на Anthropic, PBC.",
+    hr: "Čita tvoje lokalne Claude vjerodajnice za upite prema nedokumentiranom Anthropicovom endpointu; to može biti protivno Anthropicovim uvjetima — koristi na vlastitu odgovornost. Nije povezano s Anthropicom niti ga Anthropic podržava. Claude™ i Claude Code™ zaštitni su znakovi tvrtke Anthropic, PBC.",
+    sr: "Чита твоје локалне Claude акредитиве ради упита ка недокументованом Anthropic ендпоинту; то може бити противно условима Anthropic-а — користи на сопствену одговорност. Није повезано са Anthropic-ом нити га Anthropic подржава. Claude™ и Claude Code™ су заштитни знакови компаније Anthropic, PBC.",
+    lt: "Nuskaito jūsų vietinius Claude prisijungimo duomenis, kad siųstų užklausas į nedokumentuotą Anthropic prieigos tašką; tai gali prieštarauti Anthropic sąlygoms — naudokite savo rizika. Nesusijęs su Anthropic ir jos nepatvirtintas. Claude™ ir Claude Code™ yra Anthropic, PBC prekių ženklai.",
+    ja: "ローカルの Claude 認証情報を読み取り、非公開の Anthropic エンドポイントに問い合わせます。これは Anthropic の利用規約に反する可能性があります — 自己責任でご利用ください。Anthropic とは無関係であり、承認も受けていません。Claude™ および Claude Code™ は Anthropic, PBC の商標です。",
+    ko: "로컬 Claude 자격 증명을 읽어 문서화되지 않은 Anthropic 엔드포인트를 조회합니다. 이는 Anthropic 약관에 어긋날 수 있으니 자신의 책임하에 사용하세요. Anthropic과 무관하며 Anthropic의 승인을 받지 않았습니다. Claude™ 및 Claude Code™는 Anthropic, PBC의 상표입니다.",
+    zh: "读取本地的 Claude 凭据以查询未公开的 Anthropic 接口；这可能违反 Anthropic 的服务条款——使用风险自负。与 Anthropic 无关联，亦未获其认可。Claude™ 和 Claude Code™ 是 Anthropic, PBC 的商标。",
+    vi: "Đọc thông tin đăng nhập Claude cục bộ để truy vấn một endpoint không công bố của Anthropic; điều này có thể trái với Điều khoản của Anthropic — bạn tự chịu rủi ro khi dùng. Không liên kết và không được Anthropic chứng thực. Claude™ và Claude Code™ là thương hiệu của Anthropic, PBC.",
+    th: "อ่านข้อมูลรับรอง Claude ในเครื่องเพื่อสอบถามจุดเชื่อมต่อของ Anthropic ที่ไม่มีเอกสารรองรับ ซึ่งอาจขัดกับข้อกำหนดของ Anthropic — ใช้โดยรับความเสี่ยงเอง ไม่มีส่วนเกี่ยวข้องหรือได้รับการรับรองจาก Anthropic Claude™ และ Claude Code™ เป็นเครื่องหมายการค้าของ Anthropic, PBC",
+    id: "Membaca kredensial Claude lokal Anda untuk mengakses endpoint Anthropic yang tidak terdokumentasi; ini mungkin melanggar Ketentuan Anthropic — gunakan dengan risiko sendiri. Tidak berafiliasi dengan atau didukung oleh Anthropic. Claude™ dan Claude Code™ adalah merek dagang Anthropic, PBC.",
+    ms: "Membaca kelayakan Claude setempat anda untuk menanyakan endpoint Anthropic yang tidak didokumenkan; ini mungkin melanggar Terma Anthropic — gunakan atas risiko sendiri. Tiada kaitan dengan Anthropic dan tidak disahkan olehnya. Claude™ dan Claude Code™ ialah tanda dagangan Anthropic, PBC.",
+    fil: "Binabasa nito ang lokal na Claude credential mo para mag-query sa isang undocumented na endpoint ng Anthropic; maaaring labag ito sa Terms ng Anthropic — gamitin sa sariling pananagutan. Hindi kaanib o inendorso ng Anthropic. Ang Claude™ at Claude Code™ ay mga trademark ng Anthropic, PBC.",
+    hi: "यह आपके लोकल Claude क्रेडेंशियल को पढ़कर Anthropic के एक अप्रलेखित एंडपॉइंट से जानकारी लेता है; यह Anthropic की शर्तों के विरुद्ध हो सकता है — अपने जोखिम पर उपयोग करें। Anthropic से संबद्ध नहीं और न ही उसके द्वारा समर्थित। Claude™ और Claude Code™ Anthropic, PBC के ट्रेडमार्क हैं।",
+    ar: "يقرأ بيانات اعتماد Claude المحلية لديك للاستعلام من مسار غير موثّق لدى Anthropic؛ قد يخالف ذلك شروط Anthropic — استخدمه على مسؤوليتك الخاصة. غير تابع لشركة Anthropic ولا معتمد منها. Claude™ وClaude Code™ علامتان تجاريتان لشركة Anthropic, PBC.",
+    he: "קורא את פרטי הגישה המקומיים של Claude כדי לתשאל נקודת קצה לא מתועדת של Anthropic; ייתכן שהדבר מנוגד לתנאים של Anthropic — השימוש באחריותכם בלבד. אינו קשור ל-Anthropic ואינו מאושר על ידה. Claude™ ו-Claude Code™ הם סימנים מסחריים של Anthropic, PBC.",
+    fa: "اعتبارنامه محلی Claude شما را می‌خواند تا از یک نقطه پایانی مستندنشده Anthropic پرس‌وجو کند؛ این کار ممکن است خلاف شرایط Anthropic باشد — با مسئولیت خودتان استفاده کنید. وابسته به Anthropic نیست و تأیید آن را ندارد. Claude™ و Claude Code™ علامت‌های تجاری Anthropic, PBC هستند.",
+  };
+  for (const k in DISCLAIMER) if (DICT[k]) DICT[k].disclaimer_text = DISCLAIMER[k];
+
+  // the divisor is now the count of ACTIVE days, so the hard "(7d)" qualifier goes
+  const AVG7_V2 = {
+    en: "avg / day", es: "media/día", pt: "média/dia", fr: "moy./jour", de: "Ø/Tag", it: "media/giorno",
+    nl: "gem./dag", pl: "śr./dzień", ru: "сред./день", uk: "серед./день", cs: "prům./den", sk: "priem./deň",
+    ro: "medie/zi", hu: "átlag/nap", el: "μ.ό./ημέρα", sv: "snitt/dag", da: "gns./dag", fi: "ka./päivä",
+    nb: "snitt/dag", tr: "ort./gün", ca: "mitjana/dia", bg: "ср./ден", hr: "pros./dan", sr: "прос./дан",
+    lt: "vid./dienai", ja: "日平均", ko: "일평균", zh: "日均", vi: "TB/ngày", th: "เฉลี่ย/วัน", id: "rata-rata/hari",
+    ms: "purata/hari", fil: "avg/araw", hi: "औसत/दिन", ar: "متوسط/يوم", he: "ממוצע/יום", fa: "میانگین/روز",
+  };
+  for (const k in AVG7_V2) if (DICT[k]) DICT[k].avg_7d = AVG7_V2[k];
 
   const ALIAS = { no: 'nb', nn: 'nb', iw: 'he', tl: 'fil', in: 'id' };
 

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('claudeCount', {
   onLocale: (cb) => ipcRenderer.on('ui:locale', (_e, loc) => cb(loc)),
   onTheme: (cb) => ipcRenderer.on('ui:theme', (_e, th) => cb(th)),
   onUpdate: (cb) => ipcRenderer.on('update:state', (_e, data) => cb(data)),
+  onModeSet: (cb) => ipcRenderer.on('ui:modeset', (_e, m) => cb(m)),
   // renderer -> main
   refresh: () => ipcRenderer.send('ui:refresh'),
   collapse: (next) => ipcRenderer.send('ui:collapse', next),
@@ -19,6 +20,7 @@ contextBridge.exposeInMainWorld('claudeCount', {
   reportHeight: (h) => ipcRenderer.send('ui:height', h),
   updateDownload: () => ipcRenderer.send('ui:update-download'),
   updateRestart: () => ipcRenderer.send('ui:update-restart'),
+  updateDismiss: () => ipcRenderer.send('ui:update-dismiss'),
   hide: () => ipcRenderer.send('ui:hide'),
   quit: () => ipcRenderer.send('ui:quit'),
   openSettings: () => ipcRenderer.send('ui:settings'),

@@ -7,20 +7,25 @@
   <style>
     :root {
       --ivory: #F4F1EA; --ivory-soft: #FAF8F3; --line: #E2DDD1; --track: #E7E2D6;
-      --ink: #2A2722; --ink-dim: #8A8275;
+      --ink: #2A2722; --ink-dim: #746C5E;
       --coral: #D97757; --terra: #C2562F; --rust: #9B3415;
+      /* semantic level ramp — meaning is stable across themes:
+         ok = theme accent, warn = amber family, crit = red family */
+      --lvl-ok: #D97757; --lvl-warn: #8F6212; --lvl-crit: #B3261E;
       --hover: rgba(0,0,0,0.06);
     }
     [data-theme="bloodthirsty"] {
       --ivory: #1B1113; --ivory-soft: #241719; --line: #3A2024; --track: #2E1C20;
       --ink: #F2E2E2; --ink-dim: #A88A8C;
       --coral: #D23A33; --terra: #AE2823; --rust: #7E1714;
+      --lvl-ok: #D23A33; --lvl-warn: #E09A3E; --lvl-crit: #FF6B5C;
       --hover: rgba(255,255,255,0.08);
     }
     [data-theme="zombie"] {
       --ivory: #141017; --ivory-soft: #1C1722; --line: #33283F; --track: #271E33;
       --ink: #E6F0DE; --ink-dim: #8FA086;
       --coral: #6DBF4A; --terra: #A98F2E; --rust: #9B57C9;
+      --lvl-ok: #6DBF4A; --lvl-warn: #D9A13B; --lvl-crit: #E05656;
       --hover: rgba(255,255,255,0.07);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -37,6 +42,7 @@
       box-shadow: 0 8px 24px rgba(40,30,20,0.22), 0 1px 0 rgba(255,255,255,0.6) inset;
       display: flex; flex-direction: column; overflow: hidden;
     }
+    :focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; border-radius: 6px; }
     .brand-art { width: 22px; height: 22px; flex: 0 0 auto; display: block; }
     .mini-art { width: 20px; height: 20px; flex: 0 0 auto; display: block; }
     .titlebar {
@@ -54,40 +60,69 @@
       transition: background 0.12s, color 0.12s;
     }
     .icon-btn:hover { background: var(--hover); color: var(--ink); }
+    @keyframes cc-spin { to { transform: rotate(360deg); } }
+    .icon-btn.spinning { animation: cc-spin 0.9s linear infinite; color: var(--coral); }
+    @media (prefers-reduced-motion: reduce) { .icon-btn.spinning { animation: none; } }
     .body { padding: 3px 13px 11px; display: flex; flex-direction: column; gap: 11px; flex: 1 1 auto; }
     .row { display: flex; flex-direction: column; gap: 5px; }
     .row-head { display: flex; align-items: baseline; justify-content: space-between; }
     .label { font-size: 12px; color: var(--ink-dim); }
-    .pct { font-size: 16px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--coral); }
+    .pct { font-size: 16px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--lvl-ok); }
     .track { height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; box-shadow: inset 0 1px 1px rgba(0,0,0,0.05); }
-    .fill { height: 100%; width: 0%; border-radius: 99px; background: var(--coral); transition: width 0.5s ease, background 0.3s ease; }
-    .reset { font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; min-height: 13px; }
+    .fill { height: 100%; width: 0%; border-radius: 99px; background: var(--lvl-ok); transition: width 0.5s ease, background 0.3s ease; }
+    .reset-row { display: flex; align-items: baseline; justify-content: space-between; min-height: 13px; }
+    .reset { font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+    .pace { font-size: 10.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; cursor: help; }
+    .pace.hot { color: var(--lvl-crit); font-weight: 700; }
     .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 1px; }
     .status { font-size: 10px; color: var(--ink-dim); }
+    /* every non-live status explains itself on hover AND acts as a retry button */
+    .status.stale, .status.idle { text-decoration: underline dotted; text-underline-offset: 2px; cursor: pointer; }
     .status.stale { color: var(--terra); }
-    .status.idle { color: var(--terra); cursor: help; }
+    .status.idle { color: var(--terra); }
     .models { font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
     .models.ov { color: var(--coral); font-weight: 600; }
-    .models.ov-warn { color: var(--terra); font-weight: 600; }
-    .models.ov-crit { color: var(--rust); font-weight: 700; }
+    .models.ov-warn { color: var(--lvl-warn); font-weight: 600; }
+    .models.ov-crit { color: var(--lvl-crit); font-weight: 700; }
     .divider { height: 1px; background: var(--line); margin: 9px 0 6px; }
-    .ext-title { font-size: 10px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+    /* section headers: structure (rule + spacing), not just uppercase — the
+       uppercase device is a no-op in ~10 of the 37 languages */
+    .ext-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 10.5px; font-weight: 700; color: var(--ink-dim);
+      text-transform: uppercase; letter-spacing: 0.07em;
+      margin: 10px 0 4px;
+    }
+    .ext-title::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--line); }
+    .divider + .ext-title { margin-top: 0; }
+    /* today's cost is the pane's key figure — one tier above the 12px rows */
+    .hero-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 0; cursor: help; }
+    .hero-row .k { font-size: 12px; color: var(--ink-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .hero-row .v { font-size: 14px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--coral); flex: 0 0 auto; }
     .tok-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 12px; padding: 2px 0; }
     .tok-row .k { color: var(--ink-dim); }
     .tok-row .v { font-variant-numeric: tabular-nums; font-weight: 600; }
-    .tok-row.total .v { color: var(--coral); font-weight: 700; }
-    .tok-bymodel { margin-top: 5px; display: flex; flex-direction: column; gap: 1px; }
-    .bm-row { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
-    .bm-row .bk { color: var(--ink-dim); text-transform: capitalize; }
-    .bm-row .bv { font-variant-numeric: tabular-nums; }
-    .bm-row .bpct { color: var(--coral); font-weight: 600; margin-right: 6px; }
-    .ext-note { font-size: 9.5px; color: var(--ink-dim); margin-top: 5px; line-height: 1.35; }
+    .tok-row.hint { cursor: help; }
+    .hidden { display: none !important; }
+    /* per-model / per-project splits: real columns so % and $ each align;
+       the share % is informational (not a level) — it stays in dim ink */
+    .bm-row { display: grid; grid-template-columns: minmax(0, 1fr) 3.4em minmax(5.4em, max-content); gap: 0 6px; align-items: baseline; font-size: 11px; padding: 1px 0; }
+    .bm-row .bk { color: var(--ink-dim); text-transform: capitalize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bm-row .bpct { color: var(--ink-dim); font-variant-numeric: tabular-nums; text-align: right; }
+    .bm-row .bv { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+    /* project rows show real folder names — don't rewrite their casing */
+    #tok-byproject .bm-row .bk { text-transform: none; }
+    .ext-note { font-size: 10.5px; color: var(--ink-dim); margin-top: 6px; line-height: 1.35; }
     #ext { display: none; flex-direction: column; }
     body.mode-extended #ext { display: flex; }
+    /* the disclosure toggle doubles as the boundary between summary and detail:
+       full-width row with its own hairline = separator + control in one */
     .ext-toggle {
-      display: flex; align-items: center; gap: 5px; margin-top: 6px;
-      font-size: 10px; color: var(--ink-dim); cursor: pointer; user-select: none;
-      border-radius: 6px; padding: 2px 4px; width: fit-content;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 8px; padding: 4px 2px 2px;
+      border-top: 1px solid var(--line);
+      font-size: 10.5px; color: var(--ink-dim); cursor: pointer; user-select: none;
+      border-radius: 0 0 6px 6px; width: 100%;
     }
     .ext-toggle:hover { background: var(--hover); color: var(--ink); }
     .upd {
@@ -98,25 +133,46 @@
     }
     .upd:hover { border-color: var(--coral); }
     .upd .upd-ico { font-size: 11px; }
+    .upd .upd-label { flex: 1 1 auto; }
+    .upd .upd-x {
+      flex: 0 0 auto; width: 16px; height: 16px; border-radius: 5px;
+      display: none; align-items: center; justify-content: center;
+      color: var(--ink-dim); font-size: 11px; line-height: 1;
+    }
+    .upd.dismissable .upd-x { display: inline-flex; }
+    .upd .upd-x:hover { background: var(--hover); color: var(--ink); }
     body.has-upd:not(.collapsed) .upd { display: flex; }
     .ext-toggle .chev { display: inline-block; transition: transform 0.15s ease; font-size: 9px; }
     body.ext-more .ext-toggle .chev { transform: rotate(180deg); }
     #ext-more { display: none; flex-direction: column; }
     body.ext-more #ext-more { display: flex; }
-    .lim-row { display: flex; align-items: center; gap: 7px; padding: 2px 0; font-size: 11px; }
+    .lim-row { display: flex; align-items: center; gap: 7px; padding: 2px 0; font-size: 11px; cursor: help; }
     .lim-row .lk { color: var(--ink-dim); flex: 0 0 auto; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .lim-row .track { flex: 1 1 auto; height: 6px; }
     .lim-row .lv { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 32px; text-align: right; }
-    .lim-row .lv.ok { color: var(--coral); } .lim-row .lv.warn { color: var(--terra); } .lim-row .lv.crit { color: var(--rust); }
-    #limits:not(:empty) { margin-bottom: 8px; }
-    .fill.ok { background: var(--coral); } .fill.warn { background: var(--terra); } .fill.crit { background: var(--rust); }
-    .pct.ok { color: var(--coral); } .pct.warn { color: var(--terra); } .pct.crit { color: var(--rust); }
+    .lim-row .lc { flex: 0 0 auto; font-size: 9.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+    .lim-row .lv.ok { color: var(--lvl-ok); } .lim-row .lv.warn { color: var(--lvl-warn); } .lim-row .lv.crit { color: var(--lvl-crit); }
+    #limits:not(:empty) { margin: -3px 0 2px; }
+    #limits:empty { display: none; } /* an empty div must not double the flex gap */
+    .fill.ok { background: var(--lvl-ok); } .fill.warn { background: var(--lvl-warn); } .fill.crit { background: var(--lvl-crit); }
+    .pct.ok { color: var(--lvl-ok); } .pct.warn { color: var(--lvl-warn); } .pct.crit { color: var(--lvl-crit); }
+    /* stale data must not look live: dim the meters, keep the status readable
+       (.row .fill scopes to the headline bars — .lim-row already dims its own fill) */
+    body.stale .row .fill, body.stale .pct, body.stale .reset, body.stale .pace, body.stale .lim-row { opacity: 0.55; }
+    /* previous-7-days sparkline: one bar per day, oldest → yesterday */
+    .spark { display: flex; align-items: flex-end; gap: 2px; height: 18px; margin: 3px 0 1px; }
+    .spark i { flex: 1 1 auto; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--track); display: block; cursor: help; }
+    .spark i.on { background: var(--coral); opacity: 0.65; }
+    .spark i.max { background: var(--coral); opacity: 1; }
     .mini {
-      display: none; align-items: center; gap: 7px; padding: 0 13px; height: 100%;
+      display: none; align-items: center; gap: 6px; padding: 0 13px; height: 100%;
       -webkit-app-region: drag; font-size: 13px; font-weight: 700;
       font-variant-numeric: tabular-nums; color: var(--ink);
     }
+    .mini-k { font-size: 9.5px; font-weight: 400; color: var(--ink-dim); }
     .mini-sep { color: var(--ink-dim); font-weight: 400; }
+    .mini .ok { color: var(--ink); } .mini .warn { color: var(--lvl-warn); } .mini .crit { color: var(--lvl-crit); }
+    body.stale .mini span:not(.mini-k):not(.mini-sep) { opacity: 0.55; }
     .mini-art {
       -webkit-app-region: no-drag; box-sizing: content-box; cursor: pointer;
       padding: 5px; margin: -5px; border-radius: 7px;
@@ -143,8 +199,8 @@
       </div>
     </div>
 
-    <div id="upd" class="upd" role="button">
-      <span class="upd-ico">&#x2b73;</span><span id="upd-label"></span>
+    <div id="upd" class="upd" role="button" tabindex="0">
+      <span class="upd-ico">&#x2b73;</span><span id="upd-label" class="upd-label"></span><span id="upd-x" class="upd-x" role="button" tabindex="0" aria-label="dismiss">&#x2715;</span>
     </div>
 
     <div id="body" class="body">
@@ -154,7 +210,7 @@
           <span class="pct" id="five-pct">--</span>
         </div>
         <div class="track"><div class="fill" id="five-fill"></div></div>
-        <div class="reset" id="five-reset">&nbsp;</div>
+        <div class="reset-row"><span class="reset" id="five-reset">&nbsp;</span><span class="pace" id="five-pace" dir="ltr" data-i18n-title="pace_hint"></span></div>
       </div>
 
       <div class="row">
@@ -163,44 +219,61 @@
           <span class="pct" id="seven-pct">--</span>
         </div>
         <div class="track"><div class="fill" id="seven-fill"></div></div>
-        <div class="reset" id="seven-reset">&nbsp;</div>
+        <div class="reset-row"><span class="reset" id="seven-reset">&nbsp;</span></div>
       </div>
 
+      <!-- scoped account limits (per-model weekly caps): same data family as the
+           two bars above, so they live with them — not inside the local pane -->
+      <div id="limits"></div>
+
       <div class="foot">
-        <span id="status" class="status" data-i18n="connecting">connecting…</span>
+        <span id="status" class="status" data-i18n="connecting" role="button" tabindex="0">connecting…</span>
         <span id="models" class="models"></span>
       </div>
 
       <div id="ext">
         <div class="divider"></div>
-        <div class="ext-title" id="limits-title" data-i18n="limits_title" style="display: none;">model limits</div>
-        <div id="limits"></div>
-        <div class="ext-title" data-i18n="cc_today">Claude Code · today</div>
-        <div class="tok-row total"><span class="k" data-i18n="equiv_cost">equivalent cost</span><span class="v" id="tok-cost">–</span></div>
-        <div class="tok-row"><span class="k" data-i18n="avg_7d">avg / day (7d)</span><span class="v" id="tok-avg7">–</span></div>
 
-        <div id="ext-more-toggle" class="ext-toggle" role="button" aria-expanded="false">
-          <span class="chev">&#x25be;</span><span id="ext-more-label" data-i18n="t_more">more details</span>
+        <div class="ext-title" data-i18n="cc_today">Claude Code · today</div>
+        <div class="hero-row" id="hero-row"><span class="k" data-i18n="equiv_cost">API value</span><span class="v" id="tok-cost">–</span></div>
+        <div class="tok-row" id="row-proj"><span class="k" data-i18n="day_projection">projected today</span><span class="v" id="tok-proj">–</span></div>
+        <div id="bymodel-wrap" class="hidden">
+          <div class="ext-title" data-i18n="by_model">by model</div>
+          <div id="tok-bymodel"></div>
+        </div>
+        <div class="ext-note hidden" id="tok-nodata" data-i18n="no_data">no Claude Code activity found yet</div>
+
+        <div id="ext-more-toggle" class="ext-toggle" role="button" tabindex="0" aria-expanded="false">
+          <span id="ext-more-label" data-i18n="t_more">more details</span><span class="chev">&#x25be;</span>
         </div>
         <div id="ext-more">
+          <div id="byproject-wrap" class="hidden">
+            <div class="ext-title" data-i18n="by_project">by project</div>
+            <div id="tok-byproject"></div>
+          </div>
+
+          <div class="ext-title" data-i18n="tokens_title">tokens</div>
           <div class="tok-row"><span class="k" data-i18n="input">input</span><span class="v" id="tok-in">–</span></div>
           <div class="tok-row"><span class="k" data-i18n="output">output</span><span class="v" id="tok-out">–</span></div>
           <div class="tok-row"><span class="k" data-i18n="cache_read">cache · read</span><span class="v" id="tok-cr">–</span></div>
           <div class="tok-row"><span class="k" data-i18n="cache_write">cache · write</span><span class="v" id="tok-cw">–</span></div>
-          <div class="tok-row"><span class="k" data-i18n="cache_savings">cache savings</span><span class="v" id="tok-save">–</span></div>
-          <div class="tok-bymodel" id="tok-bymodel"></div>
-          <div class="tok-row"><span class="k" data-i18n="day_projection">projected today</span><span class="v" id="tok-proj">–</span></div>
-          <div class="tok-row"><span class="k" data-i18n="last_7d">last 7 days</span><span class="v" id="tok-week">–</span></div>
-          <div class="ext-note" id="tok-note" data-i18n="cost_note">Claude Code (CLI) only · ~API value, already included in your Max plan</div>
+          <div class="tok-row hint" id="row-save" data-i18n-title="cache_savings_hint"><span class="k" data-i18n="cache_savings">cache savings</span><span class="v" id="tok-save">–</span></div>
+
+          <div class="ext-title" data-i18n="last_7d">previous 7 days</div>
+          <div class="tok-row"><span class="k" data-i18n="total_label">total</span><span class="v" id="tok-week">–</span></div>
+          <div class="tok-row"><span class="k" data-i18n="avg_7d">avg / day</span><span class="v" id="tok-avg7">–</span></div>
+          <div class="spark" id="tok-spark"></div>
+
+          <div class="ext-note" id="tok-note" data-i18n="cost_note">Claude Code (CLI) only</div>
         </div>
       </div>
     </div>
 
     <div id="mini" class="mini">
-      <img class="mini-art" id="mini-art" src="assets/claudula.png" width="20" height="20" data-i18n-title="t_expand" title="expand" role="button" alt="expand" />
-      <span id="mini-five">--</span>
+      <img class="mini-art" id="mini-art" src="assets/claudula.png" width="20" height="20" data-i18n-title="t_expand" title="expand" role="button" tabindex="0" alt="expand" />
+      <span class="mini-k">5h</span><span id="mini-five">--</span>
       <span class="mini-sep">·</span>
-      <span id="mini-seven">--</span>
+      <span class="mini-k">7d</span><span id="mini-seven">--</span>
     </div>
   </div>
   <script src="i18n.js"></script>

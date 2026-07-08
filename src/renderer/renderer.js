@@ -16,12 +16,11 @@ function levelClass(p) {
   return 'ok';
 }
 
-const LEVEL_COLOR = { ok: '#D97757', warn: '#C2562F', crit: '#9B3415' };
-
 let mode = 'simple';
 let extMore = false;          // fine-detail pane inside extended mode
 let lastTk = null;            // last tokens payload (re-render on language switch)
 let updState = null;          // update banner: {state: available|downloading|ready, version, percent}
+let updConfirm = null;        // "ready" needs a second click within a few seconds
 let LOCALE = 'en';
 function applyTheme(theme) {
   const t = (theme === 'bloodthirsty' || theme === 'zombie') ? theme : 'classic';
@@ -37,15 +36,28 @@ function applyI18n(loc) {
   applyMode(mode);          // re-translate the mode button title
   applyExtMore(extMore);    // re-translate the more/less toggle
   renderUpdate();           // re-translate the update banner
-  if (latest) renderAll();  // re-translate dynamic status/reset
-  if (lastTk) renderTokens(lastTk); // re-translate the "other" tier row
+  syncHeroHint();           // account-dependent tooltip on the cost row
+  renderAll();              // re-translate dynamic status/reset (also the no-data error state)
+  if (lastTk) renderTokens(lastTk); // re-translate rows + locale number formats
   reportHeight();           // label lengths differ per language
 }
+// Locale-aware compact token counts ("17.6M" / "17,6 mln"), tabular-safe.
 function fmtTok(n) {
   n = n || 0;
-  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
-  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
-  return '' + n;
+  try {
+    return new Intl.NumberFormat(LOCALE, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+  } catch (_) {
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+    return '' + n;
+  }
+}
+function fmtMoney(amount, currency) {
+  try {
+    return new Intl.NumberFormat(LOCALE, { style: 'currency', currency: currency || 'USD', maximumFractionDigits: 2 }).format(amount || 0);
+  } catch (_) {
+    return '$' + (amount || 0).toFixed(2);
+  }
 }
 function applyMode(m) {
   mode = m === 'extended' ? 'extended' : 'simple';
@@ -62,16 +74,25 @@ function applyExtMore(v) {
   $('ext-more-label').textContent = t(extMore ? 't_less' : 't_more');
 }
 
-// In-widget update banner (the tray mirrors it): available -> click downloads;
-// downloading -> shows %; ready -> click restarts into the new version.
+// The "API value" figure needs its explanation ON the number, not in a footnote:
+// subscription accounts see "covered, not billed"; API-key accounts must not.
+function syncHeroHint() {
+  $('hero-row').title = t(nocredFlag ? 'equiv_cost_hint_api' : 'equiv_cost_hint');
+}
+
+// In-widget update banner (the tray mirrors it): available -> click downloads
+// (✕ snoozes this version); downloading -> shows %; ready -> click twice to
+// restart into the new version (a single stray click must not kill the session).
 function renderUpdate() {
   document.body.classList.toggle('has-upd', !!updState);
-  if (!updState) return;
+  const upd = $('upd');
+  if (!updState) { upd.classList.remove('dismissable'); return; }
   let label;
-  if (updState.state === 'ready') label = t('update_restart');
+  if (updState.state === 'ready') label = updConfirm ? t('update_confirm') : t('update_restart');
   else if (updState.state === 'downloading') label = t('updating') + (updState.percent ? ' ' + updState.percent + '%' : '');
   else label = t('update_download') + (updState.version ? ' · v' + updState.version : '');
   $('upd-label').textContent = label;
+  upd.classList.toggle('dismissable', updState.state === 'available');
 }
 
 // Content-driven window height: the visible content varies (update banner,
@@ -124,20 +145,26 @@ function renderWindow(prefix, w) {
   resetEl.textContent = fmtCountdown(w.resetsAt);
 }
 
+// Burn-rate hint next to the 5h countdown: "≈ +12%/h", red when the limit
+// would arrive before the reset. Language-neutral (number + unit glyphs).
+function renderPace(u) {
+  const el = $('five-pace');
+  const p = u && u.pace;
+  if (!p || stale) { el.textContent = ''; el.className = 'pace'; return; }
+  el.textContent = `≈ +${p.perHour}%/h`;
+  el.className = 'pace' + (p.hot ? ' hot' : '');
+}
+
 function renderMini(u) {
   const five = u && u.fiveHour ? u.fiveHour.utilization : null;
   const seven = u && u.sevenDay ? u.sevenDay.utilization : null;
-  $('mini-five').textContent = five != null ? five + '%' : '--';
-  $('mini-seven').textContent = seven != null ? seven + '%' : '--';
-  // (the vampire art doesn't change color; the level shows in each bar's %)
-}
-
-function fmtMoney(amount, currency) {
-  try {
-    return new Intl.NumberFormat(LOCALE, { style: 'currency', currency, maximumFractionDigits: 2 }).format(amount || 0);
-  } catch (_) {
-    return (currency || '') + ' ' + (amount || 0).toFixed(2);
-  }
+  const f = $('mini-five');
+  const s = $('mini-seven');
+  f.textContent = five != null ? five + '%' : '--';
+  s.textContent = seven != null ? seven + '%' : '--';
+  // the level shows even collapsed: 85%+ must read as critical at a glance
+  f.className = five != null ? levelClass(five) : '';
+  s.className = seven != null ? levelClass(seven) : '';
 }
 
 function renderModels(u) {
@@ -145,7 +172,9 @@ function renderModels(u) {
   // paid overage takes priority (real money); only shown when enabled
   const ov = u.overage;
   if (ov && ov.enabled) {
-    el.textContent = `${t('overage')} ${fmtMoney(ov.used, ov.currency)} · ${ov.percent}%`;
+    // used / limit: the only real-money figure in the app gets its denominator
+    const denom = ov.limit > 0 ? ` / ${fmtMoney(ov.limit, ov.currency)}` : ` · ${ov.percent}%`;
+    el.textContent = `${t('overage')} ${fmtMoney(ov.used, ov.currency)}${denom}`;
     const sev = String(ov.severity || '').toLowerCase();
     const cls = (sev.includes('crit') || sev.includes('alert')) ? 'ov-crit'
       : (sev.includes('warn') || sev.includes('high')) ? 'ov-warn' : 'ov';
@@ -159,15 +188,14 @@ function renderModels(u) {
   el.textContent = parts.join('  ');
 }
 
-// Scoped limits (fine-detail pane): everything in `limits` beyond the two
-// headline bars — per-model weekly caps ("Fable"), future scopes, etc.
+// Scoped account limits (per-model weekly caps etc): rendered with the headline
+// bars — same payload, same subject. Countdown inline once the limit matters.
 function renderLimits(u) {
   const el = $('limits');
   el.textContent = '';
   const rows = (u && u.limits ? u.limits : [])
     .filter((l) => l.kind !== 'session' && l.kind !== 'weekly_all')
-    .slice(0, 4); // the window has a fixed height; cap the list
-  $('limits-title').style.display = rows.length ? '' : 'none';
+    .slice(0, 4); // keep the widget glanceable; cap the list
   for (const l of rows) {
     const lvl = levelClass(l.percent);
     const row = document.createElement('div');
@@ -183,10 +211,24 @@ function renderLimits(u) {
     fill.style.width = Math.min(100, l.percent) + '%';
     track.appendChild(fill);
     const v = document.createElement('span');
-    v.className = 'lv ' + lvl; // theme-aware colors via CSS vars
+    v.className = 'lv ' + lvl; // theme-aware semantic colors via CSS vars
     v.textContent = l.percent + '%';
     row.title = fmtCountdown(l.resetsAt);
     row.append(k, track, v);
+    // a limit that's half gone deserves its reset time in plain sight,
+    // not behind a hover tooltip
+    if (l.percent >= 50 && l.resetsAt) {
+      const c = document.createElement('span');
+      c.className = 'lc';
+      const ms = new Date(l.resetsAt).getTime() - Date.now();
+      if (Number.isFinite(ms) && ms > 0) {
+        const totalMin = Math.floor(ms / 60000);
+        const d = Math.floor(totalMin / 1440);
+        const h = Math.floor((totalMin % 1440) / 60);
+        c.textContent = d > 0 ? `${d}d ${h}h` : `${h}h ${String(totalMin % 60).padStart(2, '0')}m`;
+        row.appendChild(c);
+      }
+    }
     el.appendChild(row);
   }
 }
@@ -229,25 +271,29 @@ function renderStatus(u) {
 }
 
 function renderAll() {
+  // stale data must not look live (bars dim, countdown freezes)
+  document.body.classList.toggle('stale', stale);
   if (!latest) {
     // No data yet: if the first fetch failed, at least show the status
     // (offline/expired) instead of staying stuck on "connecting…".
-    if (stale) { renderWindow('five', null); renderWindow('seven', null); renderMini(null); renderStatus(null); }
+    if (stale) { renderWindow('five', null); renderWindow('seven', null); renderPace(null); renderMini(null); renderStatus(null); }
     return;
   }
   renderWindow('five', latest.fiveHour);
   renderWindow('seven', latest.sevenDay);
+  renderPace(latest);
   renderModels(latest);
   renderLimits(latest);
   renderStatus(latest);
   renderMini(latest);
+  syncHeroHint();
   reportHeight();
 }
 
 function startCountdown() {
   clearInterval(countdownTimer);
   countdownTimer = setInterval(() => {
-    if (!latest) return;
+    if (!latest || stale) return; // frozen while stale: a ticking countdown reads as live data
     if (latest.fiveHour) $('five-reset').textContent = fmtCountdown(latest.fiveHour.resetsAt);
     if (latest.sevenDay) $('seven-reset').textContent = fmtCountdown(latest.sevenDay.resetsAt);
   }, 1000);
@@ -264,49 +310,128 @@ api.onInit(({ collapsed, mode, extMore, locale, theme }) => {
 
 api.onLocale((loc) => applyI18n(loc));
 api.onTheme((th) => applyTheme(th));
+api.onModeSet((m) => { applyMode(m); reportHeight(); }); // tray-initiated mode change
 
 api.onUpdate((u) => {
   updState = (u && u.state && u.state !== 'none') ? u : null;
+  if (!updState || updState.state !== 'ready') { clearTimeout(updConfirm); updConfirm = null; }
   renderUpdate();
   reportHeight();
 });
 
+// One .bm-row: name | share% (dim) | $ — real grid columns so both align.
+function bmRow(name, pct, cost, tooltip) {
+  const row = document.createElement('div');
+  row.className = 'bm-row';
+  const k = document.createElement('span'); k.className = 'bk'; k.textContent = name;
+  const p = document.createElement('span'); p.className = 'bpct'; p.textContent = pct != null ? pct + '%' : '';
+  const v = document.createElement('span'); v.className = 'bv'; v.textContent = fmtMoney(cost);
+  if (tooltip) row.title = tooltip;
+  row.append(k, p, v);
+  return row;
+}
+
 function renderTokens(tk) {
+  const noData = !!tk.noData;
+  $('tok-nodata').classList.toggle('hidden', !noData);
+  if (noData) {
+    // first run / Claude Code never used: explain instead of dashes forever
+    $('tok-cost').textContent = '–';
+    $('row-proj').classList.add('hidden');
+    $('row-save').classList.add('hidden');
+    $('bymodel-wrap').classList.add('hidden');
+    $('byproject-wrap').classList.add('hidden');
+    for (const id of ['tok-in', 'tok-out', 'tok-cr', 'tok-cw', 'tok-week', 'tok-avg7']) $(id).textContent = '–';
+    $('tok-spark').classList.add('hidden');
+    reportHeight();
+    return;
+  }
   const tt = tk.totals || {};
   $('tok-in').textContent = fmtTok(tt.input);
   $('tok-out').textContent = fmtTok(tt.output);
   $('tok-cr').textContent = fmtTok(tt.cacheRead);
   $('tok-cw').textContent = fmtTok(tt.cacheWrite);
-  $('tok-cost').textContent = '$' + (tk.cost || 0).toFixed(2);
-  // per-model split: % of today's usage + cost. opus and sonnet always;
-  // fable/haiku/other only when used. Tier names are brands except "other".
+  $('tok-cost').textContent = fmtMoney(tk.cost);
+
+  // linear projection of today: only once ~1h of the day has elapsed — before
+  // that the row hides entirely (an unexplained "–" reads as broken data)
+  const dayFrac = (Date.now() - new Date().setHours(0, 0, 0, 0)) / 86400000;
+  const showProj = dayFrac > 0.05 && (tk.cost || 0) > 0;
+  $('row-proj').classList.toggle('hidden', !showProj);
+  if (showProj) $('tok-proj').textContent = fmtMoney((tk.cost || 0) / dayFrac);
+
+  // per-model split: only tiers that actually cost something, and only when
+  // there are two of them — a single row would just restate the total
   const bm = tk.byModel || {};
   const total = Object.values(bm).reduce((s, v) => s + (v.cost || 0), 0);
-  const rows = [];
+  const bmEl = $('tok-bymodel');
+  bmEl.textContent = '';
+  let bmCount = 0;
   for (const m of ['fable', 'opus', 'sonnet', 'haiku', 'other']) {
-    if ((m === 'fable' || m === 'haiku' || m === 'other') && !bm[m]) continue;
     const cost = bm[m] ? bm[m].cost : 0;
+    if (!(cost > 0.005)) continue; // skip anything that would print $0.00
     const pct = total > 0 ? Math.round((cost / total) * 100) : 0;
-    const label = m === 'other' ? t('tier_other') : m;
-    rows.push(`<div class="bm-row"><span class="bk">${label}</span><span class="bv"><span class="bpct">${pct}%</span>$${cost.toFixed(2)}</span></div>`);
+    bmEl.appendChild(bmRow(m === 'other' ? t('tier_other') : m, pct, cost));
+    bmCount++;
   }
-  $('tok-bymodel').innerHTML = rows.join('');
-  // fine-detail pane: 7-day moving average (the 7 complete days before today)
+  $('bymodel-wrap').classList.toggle('hidden', bmCount < 2);
+
+  // per-project split (top 3): answers "where did my money go" directly.
+  // Keys are full cwd paths (two repos sharing a folder name stay apart);
+  // the label is the basename, the tooltip carries the full path.
+  const bp = Object.entries(tk.byProject || {})
+    .filter(([, v]) => v.cost > 0.005)
+    .sort((a, b) => b[1].cost - a[1].cost);
+  const bpEl = $('tok-byproject');
+  bpEl.textContent = '';
+  for (const [pathKey, v] of bp.slice(0, 3)) {
+    const parts = pathKey.split(/[\\/]+/).filter(Boolean);
+    const name = parts.length ? parts[parts.length - 1] : pathKey;
+    const pct = tk.cost > 0 ? Math.round((v.cost / tk.cost) * 100) : 0;
+    bpEl.appendChild(bmRow(name, pct, v.cost, pathKey));
+  }
+  $('byproject-wrap').classList.toggle('hidden', bp.length < 2);
+
+  // net cache savings vs a no-cache baseline; hidden when there was no cache
+  // activity at all (a "$0.00" row is noise)
+  const hasCache = (tt.cacheRead || 0) > 0 || (tt.cacheWrite || 0) > 0;
+  $('row-save').classList.toggle('hidden', !hasCache);
+  if (hasCache) $('tok-save').textContent = fmtMoney(tk.savings || 0);
+
+  // previous 7 complete days (today excluded — the header says so)
   const wk = tk.week || null;
-  $('tok-avg7').textContent = wk ? '$' + (wk.avgPerDay || 0).toFixed(2) : '–';
-  $('tok-week').textContent = wk ? '$' + (wk.cost || 0).toFixed(2) : '–';
-  // what today's cache reads would have cost as regular input
-  $('tok-save').textContent = '$' + (tk.savings || 0).toFixed(2);
-  // linear projection: cost so far / fraction of the day elapsed (needs a
-  // little runway before it means anything)
-  const dayFrac = (Date.now() - new Date().setHours(0, 0, 0, 0)) / 86400000;
-  $('tok-proj').textContent = dayFrac > 0.05 ? '$' + ((tk.cost || 0) / dayFrac).toFixed(2) : '–';
+  $('tok-week').textContent = wk ? fmtMoney(wk.cost || 0) : '–';
+  $('tok-avg7').textContent = wk ? fmtMoney(wk.avgPerDay || 0) : '–';
+
+  // daily sparkline: oldest → yesterday; hover names the day and the cost
+  const spark = $('tok-spark');
+  spark.textContent = '';
+  const days = (wk && wk.days) || [];
+  const max = Math.max(0, ...days);
+  spark.classList.toggle('hidden', !(max > 0));
+  if (max > 0) {
+    const dayName = (offset) => {
+      const d = new Date();
+      d.setDate(d.getDate() - offset);
+      try { return new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric' }).format(d); }
+      catch (_) { return d.toDateString().slice(0, 10); }
+    };
+    days.forEach((v, i) => {
+      const bar = document.createElement('i');
+      const h = v > 0 ? Math.max(3, Math.round((v / max) * 18)) : 2;
+      bar.style.height = h + 'px';
+      if (v > 0) bar.className = v === max ? 'max' : 'on';
+      bar.title = `${dayName(7 - i)} · ${fmtMoney(v)}`;
+      spark.appendChild(bar);
+    });
+  }
   reportHeight();
 }
 
 api.onTokens((tk) => {
   if (!tk) return;
   lastTk = tk;
+  stopSpin();
   renderTokens(tk);
 });
 
@@ -316,6 +441,7 @@ api.onUsage((u) => {
   expiredFlag = false;
   nocredFlag = false;
   unavailableFlag = false;
+  stopSpin();
   renderAll();
 });
 
@@ -325,19 +451,43 @@ api.onError(({ last, expired, noCredential, unavailable }) => {
   nocredFlag = !!noCredential;
   unavailableFlag = !!unavailable;
   if (last) latest = last;
+  stopSpin();
   renderAll();
 });
 
-// ---- Controles ----
-$('btn-refresh').addEventListener('click', () => {
-  $('status').textContent = t('updating');
+// ---- Controls ----
+// Refresh feedback lives on the button itself: it spins until an answer
+// (usage, error or tokens) arrives — and the status text resets its error
+// color instead of showing "updating…" painted in stale red.
+function startSpin() { $('btn-refresh').classList.add('spinning'); }
+function stopSpin() { $('btn-refresh').classList.remove('spinning'); }
+function doRefresh() {
+  const st = $('status');
+  st.textContent = t('updating');
+  st.className = 'status';
+  st.title = '';
+  startSpin();
   api.refresh();
-});
+}
+$('btn-refresh').addEventListener('click', doRefresh);
+// the status word doubles as a retry button whenever it reports a problem —
+// its tooltips already say "press refresh"; let the text be the button
+$('status').addEventListener('click', () => { if (stale) doRefresh(); });
 $('btn-hide').addEventListener('click', () => api.hide());
 $('upd').addEventListener('click', () => {
   if (!updState) return;
-  if (updState.state === 'ready') api.updateRestart();
-  else if (updState.state === 'available') api.updateDownload();
+  if (updState.state === 'ready') {
+    // restarting kills whatever the user is doing — require a second click
+    if (updConfirm) { clearTimeout(updConfirm); updConfirm = null; api.updateRestart(); return; }
+    updConfirm = setTimeout(() => { updConfirm = null; renderUpdate(); }, 5000);
+    renderUpdate();
+  } else if (updState.state === 'available') {
+    api.updateDownload();
+  }
+});
+$('upd-x').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (updState && updState.state === 'available') api.updateDismiss();
 });
 $('btn-settings').addEventListener('click', () => api.openSettings());
 $('btn-mode').addEventListener('click', () => {
@@ -351,6 +501,17 @@ $('ext-more-toggle').addEventListener('click', () => {
   reportHeight();
 });
 
+// Keyboard: every role="button" must actually work as a button.
+function keyable(el, fn) {
+  el.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); }
+  });
+}
+keyable($('ext-more-toggle'), () => $('ext-more-toggle').click());
+keyable($('upd'), () => $('upd').click());
+keyable($('upd-x'), () => $('upd-x').click());
+keyable($('status'), () => { if (stale) doRefresh(); });
+
 let collapsed = false;
 $('btn-collapse').addEventListener('click', () => {
   collapsed = true;
@@ -361,10 +522,12 @@ function expand() {
   collapsed = false;
   document.body.classList.remove('collapsed');
   api.collapse(false);
+  reportHeight(); // content (banner, limits, locale) may have changed while collapsed
 }
-// Clique simples na faisca expande (no-drag, alvo de toque generoso).
+// Single click on the vampire art expands (no-drag, generous touch target).
 $('mini-art').addEventListener('click', (e) => { e.stopPropagation(); expand(); });
-// Fallback: duplo-clique em qualquer lugar da pilula.
+keyable($('mini-art'), expand);
+// Fallback: double-click anywhere on the pill.
 $('mini').addEventListener('dblclick', expand);
 // Recovery via tray (in case the pill becomes unreachable).
 api.onExpand(expand);
