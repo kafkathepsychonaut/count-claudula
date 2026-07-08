@@ -36,6 +36,7 @@
     }
     body { padding: 11px; }
     .card {
+      position: relative; /* anchors the .tip tooltip */
       height: 100%;
       background: linear-gradient(180deg, var(--ivory-soft), var(--ivory));
       border: 1px solid var(--line); border-radius: 16px;
@@ -169,10 +170,22 @@
        (.row .fill scopes to the headline bars — .lim-row already dims its own fill) */
     body.stale .row .fill, body.stale .pct, body.stale .reset, body.stale .pace, body.stale .lim-row { opacity: 0.55; }
     /* previous-7-days sparkline: one bar per day, oldest → yesterday */
-    .spark { display: flex; align-items: flex-end; gap: 2px; height: 18px; margin: 3px 0 1px; }
+    .spark { display: flex; align-items: flex-end; gap: 2px; height: 18px; margin: 3px 0 0; }
     .spark i { flex: 1 1 auto; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--track); display: block; cursor: help; }
     .spark i.on { background: var(--coral); opacity: 0.65; }
     .spark i.max { background: var(--coral); opacity: 1; }
+    /* weekday initials under the bars — the chart must name its own axis */
+    .spark-labels { display: flex; gap: 2px; margin: 1px 0 1px; }
+    /* flex-basis 0 so the 7 label columns split the row exactly like the bars */
+    .spark-labels span { flex: 1 1 0; min-width: 0; font-size: 8.5px; color: var(--ink-dim); text-align: center; overflow: hidden; }
+    /* self-drawn tooltip: native title tips are unreliable on an unfocused
+       always-on-top window, and the bars carry the only per-day values */
+    .tip {
+      position: absolute; z-index: 9; pointer-events: none; display: none;
+      background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 6px;
+      padding: 3px 8px; font-size: 10.5px; color: var(--ink); white-space: nowrap;
+      font-variant-numeric: tabular-nums; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
     .mini {
       display: none; align-items: center; gap: 6px; padding: 0 13px; height: 100%;
       -webkit-app-region: drag; font-size: 13px; font-weight: 700;
@@ -281,11 +294,14 @@
           <div class="tok-row"><span class="k" data-i18n="total_label">total</span><span class="v" id="tok-week">–</span></div>
           <div class="tok-row"><span class="k" data-i18n="avg_7d">avg / day</span><span class="v" id="tok-avg7">–</span></div>
           <div class="spark" id="tok-spark"></div>
+          <div class="spark-labels" id="tok-spark-labels"></div>
 
           <div class="ext-note" id="tok-note" data-i18n="cost_note">Claude Code (CLI) only</div>
         </div>
       </div>
     </div>
+
+    <div id="tip" class="tip"></div>
 
     <div id="mini" class="mini">
       <img class="mini-art" id="mini-art" src="assets/claudula.png" width="20" height="20" data-i18n-title="t_expand" title="expand" role="button" tabindex="0" alt="expand" />

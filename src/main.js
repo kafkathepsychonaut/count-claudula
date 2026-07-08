@@ -3,7 +3,7 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, screen, shell } =
 const fs = require('fs');
 const path = require('path');
 const { fetchUsage, credPath } = require('./usage');
-const { todayUsage } = require('./usage-jsonl');
+const { todayUsage, setCacheDir, flushCache } = require('./usage-jsonl');
 const { readStatusline, ensureCaptureScript, captureCommand } = require('./usage-statusline');
 const { makeTrayIcon } = require('./icon');
 const i18n = require('./renderer/i18n');
@@ -286,6 +286,29 @@ function setExtHeight(h) {
   if (!collapsed) applyBounds();
 }
 
+// ---- Local token aggregation (JSONL) ----
+let tokensInFlight = null; // single-flight: polls may overlap the slow first scan
+let tokensPrimed = false;  // first successful aggregation happened (boot prefetch)
+function fetchTokens() {
+  if (tokensInFlight) return tokensInFlight;
+  tokensInFlight = (async () => {
+    try {
+      // null = no logs at all (Claude Code never ran): tell the renderer so it
+      // can explain itself instead of showing dashes forever
+      const tk = (await todayUsage()) || { noData: true, at: Date.now() };
+      lastTokens = tk;
+      tokensPrimed = true;
+      if (win) win.webContents.send('tokens:update', tk);
+    } catch (_) {
+      // a cold-start failure must not leave the pane stuck on "loading…"
+      if (!tokensPrimed && win) win.webContents.send('tokens:update', { noData: true, at: Date.now() });
+    } finally {
+      tokensInFlight = null;
+    }
+  })();
+  return tokensInFlight;
+}
+
 // ---- Poller ----
 function scheduleNext(ms) {
   clearTimeout(pollTimer);
@@ -300,24 +323,12 @@ async function poll() {
   const allowNetwork = rejected4xx < BREAKER_TRIP || breakerRetry;
   breakerRetry = false; // a re-arm is good for exactly one attempt
   try {
-    // Claude Code tokens: LOCAL data (JSONL). Runs independently of the network,
-    // so it doesn't disappear when the usage endpoint is offline or the breaker
-    // is tripped.
-    let tokensFetched = false;
-    const fetchTokens = async () => {
-      if (tokensFetched) return;
-      tokensFetched = true;
-      try {
-        // null = no logs at all (Claude Code never ran): tell the renderer so it
-        // can explain itself instead of showing dashes forever
-        const tk = (await todayUsage()) || { noData: true, at: Date.now() };
-        lastTokens = tk;
-        if (win) win.webContents.send('tokens:update', tk);
-      } catch (_) { /* don't break the cycle */ }
-    };
-    // API-key/Console accounts have no subscription bars — the token pane IS the
-    // widget for them, so it stays fresh in simple mode too.
-    if (mode === 'extended' || (lastError && lastError.noCredential)) await fetchTokens();
+    // Local token pane: fetched in PARALLEL with the usage fetch (it must never
+    // delay the bars' first paint) — every cycle in extended/nocred modes, plus
+    // once at boot in any mode so the detailed view opens warm. The disk cache
+    // makes repeat scans cheap; simple-mode subscription users pay nothing per
+    // cycle after the boot prefetch.
+    if (mode === 'extended' || (lastError && lastError.noCredential) || !tokensPrimed) fetchTokens();
     if (getSettings().source === 'statusline') {
       // statusLine source: 100% local (capture file written by Claude Code's
       // statusLine hook). No network, so no breaker/backoff concerns.
@@ -335,9 +346,6 @@ async function poll() {
         };
         if (win) win.webContents.send('usage:error', lastError);
         updateTrayTitleStale();
-        // API-key account on the statusline source: the token pane is the
-        // widget's content — keep it fresh regardless of mode
-        if (err.noCredential) await fetchTokens();
       }
       scheduleNext(POLL_ACTIVE_MS);
       return;
@@ -383,9 +391,9 @@ async function poll() {
       if (err && err.noCredential) {
         // API-key / Console account: a steady state, not an outage. Poll at the
         // calm cadence — the credential watcher re-polls instantly if a
-        // subscription login ever appears. The token pane is this account's
-        // main content, so fill it right away (first poll included).
-        await fetchTokens();
+        // subscription login ever appears. The cycle that DISCOVERS the state
+        // fills the pane right away (the top-of-poll gate used the old error).
+        fetchTokens();
         scheduleNext(POLL_ACTIVE_MS);
       } else if (err && err.rateLimited) {
         // 429/529: back off for real (exponential up to 30 min), honoring Retry-After
@@ -640,6 +648,14 @@ function wirePowerEvents() {
 
 // ---- IPC from the renderer ----
 ipcMain.on('ui:refresh', pollNow);
+// Automated refresh from the reset-crossing tick: obeys the lock/suspend pause
+// and does NOT re-arm the circuit breaker — those overrides are reserved for
+// genuine user gestures (pollNow).
+ipcMain.on('ui:autorefresh', () => {
+  if (paused) return;
+  if (polling) { pollQueued = true; return; }
+  scheduleNext(0);
+});
 ipcMain.on('ui:collapse', (_e, next) => setCollapsed(!!next));
 ipcMain.on('ui:mode', (_e, m) => setMode(m));
 ipcMain.on('ui:extmore', (_e, v) => setExtMore(!!v));
@@ -707,6 +723,7 @@ if (!gotLock) {
   app.on('second-instance', () => { if (win) { win.show(); win.focus(); } });
   app.whenReady().then(() => {
     if (process.platform === 'win32') app.setAppUserModelId('com.countclaudula.app');
+    setCacheDir(app.getPath('userData')); // JSONL aggregation survives restarts
     migrateLegacyState();
     createWindow();
     buildTray();
@@ -725,6 +742,7 @@ if (!gotLock) {
     clearTimeout(credWatchRetry);
     try { if (credWatcher) credWatcher.close(); } catch (_) {}
     unwatchStatusline();
+    flushCache(); // a pending debounced save must not be lost on quit
   });
   app.on('window-all-closed', (e) => { /* stays alive in the tray */ });
   app.on('activate', () => { if (!win) createWindow(); else win.show(); });

@@ -65,6 +65,14 @@ function applyMode(m) {
   const b = $('btn-mode');
   if (mode === 'extended') { b.innerHTML = '&#x229f;'; b.title = t('t_simple'); }
   else { b.innerHTML = '&#x229e;'; b.title = t('t_detailed'); }
+  hideTip();
+  syncLoadingPlaceholder();
+}
+
+// First aggregation of a heavy history takes a while — say so instead of "–".
+// Covers extended mode AND nocred accounts (whose pane shows in simple mode).
+function syncLoadingPlaceholder() {
+  if (!lastTk && (mode === 'extended' || nocredFlag)) $('tok-cost').textContent = t('tray_loading');
 }
 
 function applyExtMore(v) {
@@ -72,6 +80,7 @@ function applyExtMore(v) {
   document.body.classList.toggle('ext-more', extMore);
   $('ext-more-toggle').setAttribute('aria-expanded', String(extMore));
   $('ext-more-label').textContent = t(extMore ? 't_less' : 't_more');
+  hideTip(); // the hovered bar may have just been folded away
 }
 
 // The "API value" figure needs its explanation ON the number, not in a footnote:
@@ -124,7 +133,8 @@ function fmtCountdown(iso) {
   const pre = t('resets_in');
   if (d > 0) return `${pre} ${d}d ${h}h`;
   if (h > 0) return `${pre} ${h}h ${String(m).padStart(2, '0')}m`;
-  return `${pre} ${m}m`;
+  if (m > 0) return `${pre} ${m}m`;
+  return `${pre} ${Math.max(1, Math.ceil(ms / 1000))}s`; // the last minute counts in seconds
 }
 
 function renderWindow(prefix, w) {
@@ -308,6 +318,7 @@ function renderAll() {
     // (offline/expired) instead of staying stuck on "connecting…".
     if (stale) { renderWindow('five', null); renderWindow('seven', null); renderPace(null); renderMini(null); renderStatus(null); }
     syncHeroHint();  // nocred accounts reach this path — the tooltip must not claim "covered by your subscription"
+    syncLoadingPlaceholder(); // …and their pane just became visible
     reportHeight();  // the nocred toggle above changes what's visible
     return;
   }
@@ -319,15 +330,32 @@ function renderAll() {
   renderStatus(latest);
   renderMini(latest);
   syncHeroHint();
+  syncLoadingPlaceholder(); // nocredFlag may have just flipped on
   reportHeight();
 }
 
+let resetAsked = ''; // resetsAt values that already triggered an auto-refresh (latch)
 function startCountdown() {
   clearInterval(countdownTimer);
   countdownTimer = setInterval(() => {
     if (!latest || stale) return; // frozen while stale: a ticking countdown reads as live data
     if (latest.fiveHour) $('five-reset').textContent = fmtCountdown(latest.fiveHour.resetsAt);
     if (latest.sevenDay) $('seven-reset').textContent = fmtCountdown(latest.sevenDay.resetsAt);
+    // A window just rolled over: "resetting…" is only useful for seconds, not
+    // for the up-to-3-minutes until the next timed poll — ask for fresh numbers
+    // NOW. Latched per resetsAt value: an idle account whose endpoint keeps
+    // reporting the expired window (a new one only starts with new usage) gets
+    // exactly one ask, not a 60s polling loop; the timed cadence covers the rest.
+    const crossed = [];
+    for (const k of ['fiveHour', 'sevenDay']) {
+      const w = latest[k];
+      if (w && w.resetsAt && new Date(w.resetsAt).getTime() <= Date.now()) crossed.push(w.resetsAt);
+    }
+    const key = crossed.join('|');
+    if (key && key !== resetAsked) {
+      resetAsked = key;
+      api.autoRefresh(); // pause- and breaker-respecting (not the user-gesture path)
+    }
   }, 1000);
 }
 
@@ -351,6 +379,19 @@ api.onUpdate((u) => {
   reportHeight();
 });
 
+// Self-drawn tooltip anchored to the card (see .tip in the CSS).
+function showTip(el, text) {
+  const tip = $('tip');
+  tip.textContent = text;
+  tip.style.display = 'block';
+  const r = el.getBoundingClientRect();
+  const c = $('card').getBoundingClientRect();
+  const x = Math.max(4, Math.min(r.left - c.left + r.width / 2 - tip.offsetWidth / 2, c.width - tip.offsetWidth - 4));
+  tip.style.left = x + 'px';
+  tip.style.top = Math.max(2, r.top - c.top - tip.offsetHeight - 4) + 'px';
+}
+function hideTip() { $('tip').style.display = 'none'; }
+
 // One .bm-row: name | share% (dim) | $ — real grid columns so both align.
 function bmRow(name, pct, cost, tooltip) {
   const row = document.createElement('div');
@@ -364,6 +405,7 @@ function bmRow(name, pct, cost, tooltip) {
 }
 
 function renderTokens(tk) {
+  hideTip(); // the bar under a visible tooltip is about to be rebuilt or removed
   const noData = !!tk.noData;
   $('tok-nodata').classList.toggle('hidden', !noData);
   if (noData) {
@@ -375,6 +417,9 @@ function renderTokens(tk) {
     $('byproject-wrap').classList.add('hidden');
     for (const id of ['tok-in', 'tok-out', 'tok-cr', 'tok-cw', 'tok-week', 'tok-avg7']) $(id).textContent = '–';
     $('tok-spark').classList.add('hidden');
+    const lbl = $('tok-spark-labels');
+    lbl.textContent = '';
+    lbl.classList.add('hidden');
     reportHeight();
     return;
   }
@@ -435,26 +480,34 @@ function renderTokens(tk) {
   $('tok-week').textContent = wk ? fmtMoney(wk.cost || 0) : '–';
   $('tok-avg7').textContent = wk ? fmtMoney(wk.avgPerDay || 0) : '–';
 
-  // daily sparkline: oldest → yesterday; hover names the day and the cost
+  // daily sparkline: oldest → yesterday. The chart names its own axis
+  // (weekday initials under the bars) and each bar shows its day + cost in a
+  // self-drawn tooltip — native title tips are unreliable on an unfocused
+  // always-on-top window.
   const spark = $('tok-spark');
+  const sparkLbl = $('tok-spark-labels');
   spark.textContent = '';
+  sparkLbl.textContent = '';
   const days = (wk && wk.days) || [];
   const max = Math.max(0, ...days);
   spark.classList.toggle('hidden', !(max > 0));
+  sparkLbl.classList.toggle('hidden', !(max > 0));
   if (max > 0) {
-    const dayName = (offset) => {
-      const d = new Date();
-      d.setDate(d.getDate() - offset);
-      try { return new Intl.DateTimeFormat(LOCALE, { weekday: 'short', day: 'numeric' }).format(d); }
-      catch (_) { return d.toDateString().slice(0, 10); }
-    };
+    const dayDate = (offset) => { const d = new Date(); d.setDate(d.getDate() - offset); return d; };
+    const fmtDay = (d, opts) => { try { return new Intl.DateTimeFormat(LOCALE, opts).format(d); } catch (_) { return ''; } };
     days.forEach((v, i) => {
+      const d = dayDate(7 - i);
       const bar = document.createElement('i');
       const h = v > 0 ? Math.max(3, Math.round((v / max) * 18)) : 2;
       bar.style.height = h + 'px';
       if (v > 0) bar.className = v === max ? 'max' : 'on';
-      bar.title = `${dayName(7 - i)} · ${fmtMoney(v)}`;
+      const label = `${fmtDay(d, { weekday: 'short', day: 'numeric' })} · ${fmtMoney(v)}`;
+      bar.addEventListener('mouseenter', () => showTip(bar, label));
+      bar.addEventListener('mouseleave', hideTip);
       spark.appendChild(bar);
+      const s = document.createElement('span');
+      s.textContent = fmtDay(d, { weekday: 'narrow' });
+      sparkLbl.appendChild(s);
     });
   }
   reportHeight();
@@ -549,6 +602,7 @@ let collapsed = false;
 $('btn-collapse').addEventListener('click', () => {
   collapsed = true;
   document.body.classList.add('collapsed');
+  hideTip(); // #tip lives outside .body and would survive the collapse
   api.collapse(true);
 });
 function expand() {

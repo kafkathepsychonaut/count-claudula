@@ -55,8 +55,71 @@ function projectsDir() {
 
 // Per-file cache keyed by size+mtime, so unchanged files aren't re-read every poll
 // (a heavy user only actively appends to one file). Cleared when the day rolls.
+// Persisted to disk (when a dir is provided) so an app restart doesn't re-parse
+// a thousand transcripts — the first scan of a heavy history takes many seconds.
 const fileCache = new Map();
 let cacheDay = 0;
+let cacheDir = null;
+let cacheLoaded = false;
+let cacheSaveTimer = null;
+
+function setCacheDir(dir) { cacheDir = dir; }
+function cacheFilePath() { return cacheDir ? path.join(cacheDir, 'jsonl-cache.json') : null; }
+
+const CACHE_V = 1; // bump when the entry shape changes — old files are then ignored wholesale
+
+// A poisoned entry would silently skip re-aggregation while breaking the
+// summation on every poll, so entries are validated field by field on load;
+// anything suspect just re-parses (slower, never wrong).
+function validCacheEntry(v) {
+  return v && Number.isFinite(v.size) && Number.isFinite(v.mtimeMs)
+    && typeof v.weekCost === 'number'
+    && Array.isArray(v.weekDays) && v.weekDays.length === 7 && v.weekDays.every((n) => typeof n === 'number')
+    && v.agg && typeof v.agg === 'object'
+    && ['input', 'output', 'cacheRead', 'cacheWrite', 'cost', 'savings'].every((k) => typeof v.agg[k] === 'number')
+    && v.agg.byModel && typeof v.agg.byModel === 'object'
+    && v.agg.byProject && typeof v.agg.byProject === 'object';
+}
+
+function loadCacheFromDisk(startMs) {
+  cacheLoaded = true;
+  const fp = cacheFilePath();
+  if (!fp) return;
+  try {
+    const j = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    if (j.v !== CACHE_V || j.day !== startMs) return; // shape or windows moved
+    for (const [k, v] of Object.entries(j.entries || {})) {
+      if (validCacheEntry(v)) fileCache.set(k, v);
+    }
+    cacheDay = startMs;
+  } catch (_) { /* cold start is just slower, not wrong */ }
+}
+
+function cacheSnapshot() {
+  const entries = {};
+  for (const [k, v] of fileCache.entries()) entries[k] = v;
+  return JSON.stringify({ v: CACHE_V, day: cacheDay, entries });
+}
+
+function scheduleCacheSave() {
+  const fp = cacheFilePath();
+  if (!fp) return;
+  clearTimeout(cacheSaveTimer);
+  cacheSaveTimer = setTimeout(() => {
+    cacheSaveTimer = null;
+    fs.promises.writeFile(fp, cacheSnapshot()).catch(() => {});
+  }, 3000);
+}
+
+// Quit path: a pending debounced save would otherwise be silently dropped.
+function flushCache() {
+  if (!cacheSaveTimer) return;
+  clearTimeout(cacheSaveTimer);
+  cacheSaveTimer = null;
+  const fp = cacheFilePath();
+  if (!fp) return;
+  try { fs.writeFileSync(fp, cacheSnapshot()); } catch (_) {}
+}
 
 function emptyAgg() {
   return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, savings: 0, byModel: {}, byProject: {} };
@@ -174,6 +237,7 @@ async function todayUsage() {
     d.setDate(d.getDate() - (7 - i));
     dayIdx[localDayKey(d)] = i;
   }
+  if (!cacheLoaded) loadCacheFromDisk(startMs); // one-time warm start from the previous run
   if (startMs !== cacheDay) { fileCache.clear(); cacheDay = startMs; } // new day: drop the cache (windows moved)
 
   // The root readdir failing (missing dir, EACCES, ENOTDIR…) means "no data",
@@ -196,6 +260,7 @@ async function todayUsage() {
   let weekCost = 0;
   const weekDays = [0, 0, 0, 0, 0, 0, 0];
 
+  let dirty = false;
   for (const { fp, size, mtimeMs } of files) {
     seen.add(fp);
     let entry = fileCache.get(fp);
@@ -203,6 +268,7 @@ async function todayUsage() {
       const r = await aggregateFile(fp, startMs, weekMs, dayIdx); // re-read only changed files
       entry = { size, mtimeMs, agg: r.agg, weekCost: r.weekCost, weekDays: r.weekDays };
       fileCache.set(fp, entry);
+      dirty = true;
     }
     const a = entry.agg;
     weekCost += entry.weekCost;
@@ -220,7 +286,8 @@ async function todayUsage() {
     }
   }
 
-  for (const k of fileCache.keys()) if (!seen.has(k)) fileCache.delete(k); // prune gone files
+  for (const k of fileCache.keys()) if (!seen.has(k)) { fileCache.delete(k); dirty = true; } // prune gone files
+  if (dirty) scheduleCacheSave();
 
   // average over days that actually had activity — dividing by a flat 7
   // understates the figure for anyone with fewer days of history
@@ -231,7 +298,7 @@ async function todayUsage() {
   };
 }
 
-module.exports = { todayUsage };
+module.exports = { todayUsage, setCacheDir, flushCache };
 
 if (require.main === module) {
   todayUsage().then((r) => {
