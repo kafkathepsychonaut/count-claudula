@@ -82,16 +82,25 @@
     .status.idle { color: var(--terra); }
     .models { font-size: 10px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
     .divider { height: 1px; background: var(--line); margin: 9px 0 6px; }
-    /* section headers: structure (rule + spacing), not just uppercase — the
-       uppercase device is a no-op in ~10 of the 37 languages */
+    /* Two header tiers. Tier 1 (.ext-title) = the pane's TIME SECTIONS
+       ("Claude Code · today", "previous 7 days"): full ink, larger, ruled,
+       generous top gap. Tier 2 (.sub-title) = groupings INSIDE a section
+       ("by model", "tokens"): small, dim, unruled — clearly subordinate, so
+       every subgroup visibly inherits its section's time scope. */
     .ext-title {
       display: flex; align-items: center; gap: 8px;
-      font-size: 10.5px; font-weight: 700; color: var(--ink-dim);
+      font-size: 11px; font-weight: 700; color: var(--ink);
       text-transform: uppercase; letter-spacing: 0.07em;
-      margin: 10px 0 4px;
+      margin: 14px 0 5px;
     }
     .ext-title::after { content: ''; flex: 1 1 auto; height: 1px; background: var(--line); }
     .divider + .ext-title { margin-top: 0; }
+    .sub-title {
+      font-size: 9.5px; font-weight: 600; color: var(--ink-dim);
+      letter-spacing: 0.05em; margin: 8px 0 2px;
+    }
+    /* subgroup blocks (header + rows) indent under their section */
+    .subgroup { padding-inline-start: 8px; }
     /* today's cost is the pane's key figure — one tier above the 12px rows */
     .hero-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 2px 0; cursor: help; }
     .hero-row .k { font-size: 12px; color: var(--ink-dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -244,8 +253,8 @@
         <div class="ext-title" data-i18n="cc_today">Claude Code · today</div>
         <div class="hero-row" id="hero-row"><span class="k" data-i18n="equiv_cost">API value</span><span class="v" id="tok-cost">–</span></div>
         <div class="tok-row" id="row-proj"><span class="k" data-i18n="day_projection">projected today</span><span class="v" id="tok-proj">–</span></div>
-        <div id="bymodel-wrap" class="hidden">
-          <div class="ext-title" data-i18n="by_model">by model</div>
+        <div id="bymodel-wrap" class="subgroup hidden">
+          <div class="sub-title" data-i18n="by_model" data-i18n-title="cc_today">by model</div>
           <div id="tok-bymodel"></div>
         </div>
         <div class="ext-note hidden" id="tok-nodata" data-i18n="no_data">no Claude Code activity found yet</div>
@@ -254,17 +263,19 @@
           <span id="ext-more-label" data-i18n="t_more">more details</span><span class="chev">&#x25be;</span>
         </div>
         <div id="ext-more">
-          <div id="byproject-wrap" class="hidden">
-            <div class="ext-title" data-i18n="by_project">by project</div>
+          <div id="byproject-wrap" class="subgroup hidden">
+            <div class="sub-title" data-i18n="by_project" data-i18n-title="cc_today">by project</div>
             <div id="tok-byproject"></div>
           </div>
 
-          <div class="ext-title" data-i18n="tokens_title">tokens</div>
-          <div class="tok-row"><span class="k" data-i18n="input">input</span><span class="v" id="tok-in">–</span></div>
-          <div class="tok-row"><span class="k" data-i18n="output">output</span><span class="v" id="tok-out">–</span></div>
-          <div class="tok-row"><span class="k" data-i18n="cache_read">cache · read</span><span class="v" id="tok-cr">–</span></div>
-          <div class="tok-row"><span class="k" data-i18n="cache_write">cache · write</span><span class="v" id="tok-cw">–</span></div>
-          <div class="tok-row hint" id="row-save" data-i18n-title="cache_savings_hint"><span class="k" data-i18n="cache_savings">cache savings</span><span class="v" id="tok-save">–</span></div>
+          <div class="subgroup">
+            <div class="sub-title" data-i18n="tokens_title" data-i18n-title="cc_today">tokens</div>
+            <div class="tok-row"><span class="k" data-i18n="input">input</span><span class="v" id="tok-in">–</span></div>
+            <div class="tok-row"><span class="k" data-i18n="output">output</span><span class="v" id="tok-out">–</span></div>
+            <div class="tok-row"><span class="k" data-i18n="cache_read">cache · read</span><span class="v" id="tok-cr">–</span></div>
+            <div class="tok-row"><span class="k" data-i18n="cache_write">cache · write</span><span class="v" id="tok-cw">–</span></div>
+            <div class="tok-row hint" id="row-save" data-i18n-title="cache_savings_hint"><span class="k" data-i18n="cache_savings">cache savings</span><span class="v" id="tok-save">–</span></div>
+          </div>
 
           <div class="ext-title" data-i18n="last_7d">previous 7 days</div>
           <div class="tok-row"><span class="k" data-i18n="total_label">total</span><span class="v" id="tok-week">–</span></div>
