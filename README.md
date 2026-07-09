@@ -20,14 +20,23 @@ Requires Claude Code installed and logged in. The binaries are unsigned (see
 
 ## What it shows
 
-- Live **5-hour** and **weekly** usage bars with reset countdowns and color coding
-- **Detailed mode**: today's Claude Code tokens (input / output / cache), their
-  equivalent **API value** (what that usage would cost on the API — already
-  included in your Max plan, not an extra charge), and a per-model split
-  (Fable / Opus / Sonnet / Haiku)
-- **"More details" pane** (arrow inside detailed mode): per-model **weekly caps**
-  (e.g. the separate Fable limit) as mini bars, plus your **7-day cost** and
-  **daily average**
+- Live **5-hour** and **weekly** usage bars with reset countdowns, semantic color
+  coding (amber ≥60%, red ≥85% in every theme), and a **burn-rate hint**
+  ("≈ +12%/h", red when you'd hit the limit before the reset)
+- **Per-model weekly caps** (e.g. the separate Fable limit) and the **paid
+  extra-usage bar** (`$used / $limit`) right under the main bars, when your
+  account has them
+- **Detailed mode**, organized in two time sections:
+  - **Today** — the API value of today's Claude Code usage (what it would cost
+    on the API — already included in a subscription, not an extra charge), a
+    linear **projection for the day**, and splits **by model** and **by
+    project**
+  - **Previous 7 days** — total, average per active day, and a **daily
+    sparkline** with weekday labels and per-day cost on hover
+- Costs honor the billing modifiers recorded in the logs: **Batch** (0.5×),
+  **fast mode** and **US-only inference** premiums
+- **API-key / Console accounts** (no subscription windows): the widget switches
+  to a cost-first layout — today's spend leads, and the pill shows it too
 - **37 languages**, auto-detecting your OS language (right-to-left included)
 - **3 themes** — *Classic* (light), *Bloodthirsty* (dark, blood-red) and *Zombie*
   (dark, toxic-green) — switch in Settings
@@ -50,12 +59,17 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   separately and won't touch it — so if you go a long stretch using only those, expect
   that nudge until you next run any Claude Code command. (See [`src/usage.js`](src/usage.js).)
 - The token-count / cost panel reads Claude Code's local logs in
-  `~/.claude/projects/**/*.jsonl` (read-only, never touches the network).
+  `~/.claude/projects/**/*.jsonl` — **recursively**, so subagent and workflow
+  transcripts count too (read-only, never touches the network). To keep restarts
+  fast it persists an aggregation cache (`jsonl-cache.json`) in the app's own
+  data folder — derived numbers only, no transcript content.
   (See [`src/usage-jsonl.js`](src/usage-jsonl.js).)
 - Nothing else leaves your machine — no account, no telemetry, no tracking. (The
   packaged app checks GitHub for app updates on launch and every 6h, but **never
-  downloads one silently** — you start the download yourself from the tray menu.
-  The portable build doesn't even check. There is no usage telemetry either way.)
+  downloads one silently** — you start the download from the in-widget banner or
+  the tray menu; the banner can be dismissed per version, and "restart to
+  update" asks for a confirming second click. The portable build doesn't even
+  check. There is no usage telemetry either way.)
 
 > ⚠️ **Heads up on Anthropic's Terms.** The `/api/oauth/usage` endpoint is
 > **internal/undocumented** and may change or be locked to the official client at
@@ -78,8 +92,9 @@ to the data Claude Code itself pipes into its
 script and shows you the exact command to set as `statusLine` in Claude Code's
 `settings.json`; the script also prints a usable status line (model + 5h/7d %).
 Trade-off: the numbers only refresh **while a Claude Code session is running**,
-and they don't include usage from the web/desktop apps — which is why the live
-endpoint remains the default.
+they don't include usage from the web/desktop apps, and this source carries no
+paid extra-usage or per-model limit data — which is why the live endpoint
+remains the default.
 
 ## 🔍 Don't trust — audit, or build it yourself
 
