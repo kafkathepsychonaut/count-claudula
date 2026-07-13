@@ -22,7 +22,8 @@ Requires Claude Code installed and logged in. The binaries are unsigned (see
 
 - Live **5-hour** and **weekly** usage bars with reset countdowns, semantic color
   coding (amber ≥60%, red ≥85% in every theme), and a **burn-rate hint**
-  ("≈ +12%/h", red when you'd hit the limit before the reset)
+  ("≈ +12%/h" while you're burning, "≈ +0%/h" when steady, red when you'd hit
+  the limit before the reset)
 - **Per-model weekly caps** (e.g. the separate Fable limit) and the **paid
   extra-usage bar** (`$used / $limit`) right under the main bars, when your
   account has them
@@ -65,8 +66,9 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   data folder — derived numbers only, no transcript content.
   (See [`src/usage-jsonl.js`](src/usage-jsonl.js).)
 - Nothing else leaves your machine — no account, no telemetry, no tracking. (The
-  packaged app checks GitHub for app updates on launch and every 6h, but **never
-  downloads one silently** — you start the download from the in-widget banner or
+  packaged app checks GitHub for app updates on launch and every 6h — or when you
+  ask it to via **Settings → Check for updates** or the tray — but it **never
+  downloads one silently**: you start the download from the in-widget banner or
   the tray menu; the banner can be dismissed per version, and "restart to
   update" asks for a confirming second click. The portable build doesn't even
   check. There is no usage telemetry either way.)
