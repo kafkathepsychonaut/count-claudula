@@ -69,29 +69,50 @@ let paceSamples = [];        // recent (t, 5h-utilization) samples -> burn-rate 
 // samples lets the widget answer its core question — "am I going to hit the
 // limit before it resets?" — instead of only showing the current level.
 const PACE_WINDOW_MS = 90 * 60 * 1000;
-const PACE_MIN_SPAN_MS = 10 * 60 * 1000; // need some runway before a slope means anything
+const PACE_MIN_SPAN_MS = 4 * 60 * 1000; // a couple of polls of runway before a slope means anything
+
+// The endpoint reports `resets_at` with a jittering sub-second fraction — the
+// string differs on EVERY poll even though the real reset time is fixed. Compare
+// it at minute granularity so that noise never looks like a window roll (a real
+// roll moves it by ~5h). Returns a stable integer key (minutes since epoch).
+function windowKey(resetsAt) {
+  return resetsAt ? Math.floor(new Date(resetsAt).getTime() / 60000) : 0;
+}
 
 function computePace(usage) {
   const w = usage && usage.fiveHour;
   if (!w || typeof w.utilization !== 'number') { paceSamples = []; return null; }
   const now = usage.fetchedAt || Date.now();
+  const rk = windowKey(w.resetsAt);
   const last = paceSamples[paceSamples.length - 1];
-  // window rolled (reset happened or resets_at moved): old slope is meaningless
-  if (last && (w.utilization < last.u || (last.r && w.resetsAt && last.r !== w.resetsAt))) paceSamples = [];
-  if (!last || last.t !== now) paceSamples.push({ t: now, u: w.utilization, r: w.resetsAt });
+  // Only a genuine window roll invalidates the slope: utilization fell hard (a
+  // reset to ~0) or the reset time jumped by minutes. A ±1 dip is just integer
+  // rounding noise — tolerate it so the sample buffer isn't wiped every poll.
+  if (last && (w.utilization < last.u - 1 || (last.r && rk && last.r !== rk))) paceSamples = [];
+  if (!last || last.t !== now) paceSamples.push({ t: now, u: w.utilization, r: rk });
   paceSamples = paceSamples.filter((s) => now - s.t <= PACE_WINDOW_MS);
   const first = paceSamples[0];
   const spanMs = now - first.t;
   if (paceSamples.length < 2 || spanMs < PACE_MIN_SPAN_MS) return null;
-  const perHour = (w.utilization - first.u) / (spanMs / 3600000);
-  if (!(perHour > 0.5)) return null; // flat/idle: no hint is better than "+0%/h"
+  // Clamp to 0: a flat or drifting-down window reads as "≈ +0%/h" (steady) rather
+  // than vanishing — the hint stays visible almost all the time once it's warm.
+  const perHour = Math.max(0, (w.utilization - first.u) / (spanMs / 3600000));
   const hoursToReset = w.resetsAt ? (new Date(w.resetsAt).getTime() - now) / 3600000 : 0;
-  const hoursTo100 = (100 - w.utilization) / perHour;
+  const hoursTo100 = perHour > 0 ? (100 - w.utilization) / perHour : Infinity;
   return {
     perHour: Math.round(perHour),
     // "hot" = at this pace the limit arrives before the reset does
-    hot: hoursToReset > 0 && hoursTo100 < hoursToReset,
+    hot: perHour > 0 && hoursToReset > 0 && hoursTo100 < hoursToReset,
   };
+}
+
+// Warm the burn-rate buffer from disk so a restart doesn't blank the hint for
+// minutes. Stale samples (older than the window) are dropped on the next compute.
+function restorePaceSamples() {
+  try {
+    const saved = loadState().paceSamples;
+    if (Array.isArray(saved)) paceSamples = saved.filter((s) => s && typeof s.t === 'number');
+  } catch (_) { /* fresh start is fine */ }
 }
 
 // ---- Position/state persistence ----
@@ -335,6 +356,7 @@ async function poll() {
       try {
         const usage = readStatusline(app.getPath('userData'));
         usage.pace = computePace(usage);
+        saveState({ paceSamples });
         lastGood = usage;
         lastError = null;
         if (win) win.webContents.send('usage:update', usage);
@@ -361,6 +383,7 @@ async function poll() {
     try {
       const usage = await fetchUsage();
       usage.pace = computePace(usage);
+      saveState({ paceSamples });
       lastGood = usage;
       lastError = null;
       rlBackoff = 0;   // recovered: reset the rate-limit backoff
@@ -725,6 +748,7 @@ if (!gotLock) {
     if (process.platform === 'win32') app.setAppUserModelId('com.countclaudula.app');
     setCacheDir(app.getPath('userData')); // JSONL aggregation survives restarts
     migrateLegacyState();
+    restorePaceSamples();  // warm the burn-rate buffer so the hint isn't blank after a restart
     createWindow();
     buildTray();
     wirePowerEvents();
