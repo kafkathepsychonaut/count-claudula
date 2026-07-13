@@ -276,6 +276,26 @@
   };
   for (const k in UPDATE_DL) if (DICT[k]) DICT[k].update_download = UPDATE_DL[k];
 
+  // Manual "check for updates" — Settings block + tray item and its result
+  // states. Provided in English and Portuguese; other locales fall back to
+  // English via t()'s fallback (full translations are a follow-up).
+  Object.assign(DICT.en, {
+    set_updates: 'Updates',
+    update_check: 'Check for updates',
+    update_checking: 'Checking…',
+    update_uptodate: 'You’re on the latest version',
+    update_found: 'Update available',
+    update_check_error: 'Couldn’t check — try again',
+  });
+  if (DICT.pt) Object.assign(DICT.pt, {
+    set_updates: 'Atualizações',
+    update_check: 'Verificar atualizações',
+    update_checking: 'Verificando…',
+    update_uptodate: 'Você está na versão mais recente',
+    update_found: 'Atualização disponível',
+    update_check_error: 'Não foi possível verificar — tente de novo',
+  });
+
   // Circuit breaker tripped: the usage endpoint keeps refusing, so polling
   // stopped. Short status + honest tooltip with the retry gesture.
   const UNAVAILABLE = {

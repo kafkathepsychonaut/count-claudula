@@ -67,6 +67,11 @@
     }
     button.close:hover { background: var(--hover); }
     .field-col { display: flex; flex-direction: column; gap: 4px; }
+    .upd-status { font-size: 10.5px; color: var(--ink-dim); line-height: 1.3; }
+    .upd-status.ok { color: var(--coral); }
+    button.upd-btn { font: inherit; font-size: 12px; color: var(--ink); background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
+    button.upd-btn:hover { background: var(--hover); }
+    button.upd-btn:disabled { opacity: 0.5; cursor: default; }
     .fb { gap: 6px; margin-top: 2px; }
     .fb > label { font-size: 13px; }
     textarea { font: inherit; font-size: 12px; color: var(--ink); background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; resize: none; width: 100%; }
@@ -111,6 +116,14 @@
       <span data-i18n="source_hint">Use this command as your statusLine in Claude Code (settings.json). Data refreshes only while Claude Code is running.</span>
       <input class="cmd" id="source-cmd" readonly /><span class="copied" id="source-copied"></span>
       <div data-i18n="source_scope_note">this source has no paid extra-usage or per-model limit data — those need the Anthropic endpoint</div>
+    </div>
+
+    <div class="field" id="update-field" style="display: none;">
+      <div class="field-col" style="gap: 2px;">
+        <label data-i18n="set_updates">Updates</label>
+        <span class="upd-status" id="upd-status"></span>
+      </div>
+      <button class="upd-btn" id="upd-check" data-i18n="update_check">Check for updates</button>
     </div>
 
   </div>

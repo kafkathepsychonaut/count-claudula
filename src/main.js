@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, screen, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, powerMonitor, screen, shell, Notification } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { fetchUsage, credPath } = require('./usage');
@@ -543,6 +543,8 @@ function rebuildTrayMenu() {
     items.push({ type: 'separator' }, { label: i18n.t(L, 'update_restart'), click: installUpdate });
   } else if (updateAvailable && !updateDownloading) {
     items.push({ type: 'separator' }, { label: i18n.t(L, 'update_download'), click: startUpdateDownload });
+  } else if (updatesSupported()) {
+    items.push({ type: 'separator' }, { label: i18n.t(L, 'update_check'), click: trayCheckUpdates });
   }
   items.push({ type: 'separator' }, { label: i18n.t(L, 'tray_quit'), click: () => { quitting = true; app.quit(); } });
   tray.setContextMenu(Menu.buildFromTemplate(items));
@@ -574,6 +576,53 @@ function installUpdate() {
   quitting = true;
   // silent NSIS run + relaunch: updating never reopens the install wizard
   autoUpdater.quitAndInstall(true, true);
+}
+
+// Self-update only works on the packaged NSIS install (the portable build and a
+// `npm start` dev run can't apply an update), so the manual check is offered only
+// there — elsewhere the Settings block and tray item hide themselves.
+function updatesSupported() {
+  return app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR;
+}
+// Compare simple x.y.z versions: is `a` newer than `b`?
+function isNewerVersion(a, b) {
+  const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
+  const pb = String(b).split('.').map((n) => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0); }
+  return false;
+}
+// A user-initiated check (Settings button or tray item). Resolves to a state the
+// caller can show as feedback — the periodic auto-check stays silent, this one
+// must always say something. The events in setupUpdater still light the banner.
+let manualChecking = false;
+async function runManualCheck() {
+  if (!updatesSupported()) return { state: 'unsupported' };
+  if (updateReady) return { state: 'ready', version: updateVersion };
+  if (updateDownloading) return { state: 'downloading', version: updateVersion };
+  if (manualChecking) return { state: 'checking' };
+  manualChecking = true;
+  try {
+    const r = await autoUpdater.checkForUpdates();
+    const v = r && r.updateInfo && r.updateInfo.version;
+    if (v && isNewerVersion(v, app.getVersion())) return { state: 'available', version: v };
+    return { state: 'uptodate', version: app.getVersion() };
+  } catch (_) {
+    return { state: 'error' };
+  } finally {
+    manualChecking = false;
+  }
+}
+// Tray path: no window to print into, so notify for the terminal states. An
+// available update also lights the banner + tray "Download update" via events.
+async function trayCheckUpdates() {
+  const L = effectiveLocale();
+  const r = await runManualCheck();
+  if (!Notification.isSupported()) return;
+  let body = null;
+  if (r.state === 'uptodate') body = i18n.t(L, 'update_uptodate');
+  else if (r.state === 'available') body = i18n.t(L, 'update_found') + ' (' + r.version + ')';
+  else if (r.state === 'error') body = i18n.t(L, 'update_check_error');
+  if (body) new Notification({ title: 'Count Claudula', body }).show();
 }
 
 // Update via GitHub releases (packaged app only; NSIS — the portable doesn't update).
@@ -702,7 +751,10 @@ ipcMain.handle('settings:get', () => ({
   langs: i18n.LANGS,
   locale: effectiveLocale(),
   statuslineCmd: captureCommand(app.getPath('userData')),
+  updatesSupported: updatesSupported(),
+  appVersion: app.getVersion(),
 }));
+ipcMain.handle('update:check', () => runManualCheck());
 ipcMain.on('settings:set', (_e, payload) => {
   const { k, v } = payload || {}; // tolerate a malformed/empty payload
   if (!validSetting(k, v)) return; // reject unknown key / invalid value

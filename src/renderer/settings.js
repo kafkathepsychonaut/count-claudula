@@ -96,6 +96,27 @@ async function init() {
   document.getElementById('btn-close').addEventListener('click', () => api.settingsClose());
   document.getElementById('btn-donate').addEventListener('click', () => api.donate());
 
+  // Manual "check for updates" — only meaningful on the packaged NSIS install
+  if (data.updatesSupported) {
+    const updField = document.getElementById('update-field');
+    const updBtn = document.getElementById('upd-check');
+    const updStatus = document.getElementById('upd-status');
+    const setStatus = (text, ok) => { updStatus.textContent = text; updStatus.className = 'upd-status' + (ok ? ' ok' : ''); };
+    updField.style.display = '';
+    setStatus('v' + (data.appVersion || ''));
+    updBtn.addEventListener('click', async () => {
+      updBtn.disabled = true;
+      setStatus(window.I18N.t(locale, 'update_checking'));
+      let r = { state: 'error' };
+      try { r = await api.checkUpdate(); } catch (_) {}
+      if (r.state === 'available') setStatus(window.I18N.t(locale, 'update_found') + ' (v' + r.version + ')', true);
+      else if (r.state === 'error') setStatus(window.I18N.t(locale, 'update_check_error'));
+      else if (r.state === 'ready') setStatus(window.I18N.t(locale, 'update_restart'), true);
+      else setStatus(window.I18N.t(locale, 'update_uptodate') + ' · v' + (data.appVersion || ''), true);
+      updBtn.disabled = false;
+    });
+  }
+
   const fbText = document.getElementById('fb-text');
   const fbSend = document.getElementById('fb-send');
   const fbStatus = document.getElementById('fb-status');
