@@ -217,6 +217,18 @@
   };
   for (const k in EXPIRED_HINT) if (DICT[k]) DICT[k].expired_hint = EXPIRED_HINT[k];
 
+  // statusLine source is the default but isn't wired up yet: a one-time setup, not
+  // an "open Claude Code" nudge. Only en/pt for now — other locales fall back to
+  // English via t() (full translations are a follow-up).
+  const SETUP = { en: 'set up statusLine', pt: 'configure o statusLine' };
+  for (const k in SETUP) if (DICT[k]) DICT[k].setup = SETUP[k];
+
+  const SETUP_HINT = {
+    en: 'Open Settings → Data source and set the shown command as your statusLine in Claude Code (settings.json). No token, no endpoint — the Terms-safe source.',
+    pt: 'Abra Configurações → Fonte de dados e defina o comando exibido como seu statusLine no Claude Code (settings.json). Sem token, sem endpoint — a fonte segura quanto aos Termos.',
+  };
+  for (const k in SETUP_HINT) if (DICT[k]) DICT[k].setup_hint = SETUP_HINT[k];
+
   // paid overage (prefix before the amount: "extra R$12,30")
   const OVERAGE = {
     en: 'extra', es: 'extra', pt: 'extra', fr: 'extra', de: 'Zusatz', it: 'extra',

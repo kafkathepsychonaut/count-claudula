@@ -44,7 +44,11 @@ Requires Claude Code installed and logged in. The binaries are unsigned (see
 
 ## How it works (and what it touches)
 
-The number comes from the **same status endpoint that `/usage` reads**:
+The widget has **two data sources**. New installs default to the **Claude Code
+statusLine** source — fully local, no endpoint, nothing Anthropic hasn't
+sanctioned (described [below](#the-default-source-claude-code-statusline)). The
+other source is **opt-in** and reads the number from the **same status endpoint
+that `/usage` reads**:
 
 ```
 GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth token)
@@ -73,30 +77,53 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   update" asks for a confirming second click. The portable build doesn't even
   check. There is no usage telemetry either way.)
 
-> ⚠️ **Heads up on Anthropic's Terms.** The `/api/oauth/usage` endpoint is
-> **internal/undocumented** and may change or be locked to the official client at
-> any time. Using your Claude OAuth token in a third-party tool — even read-only —
-> is **automated access to Anthropic's services** and is plausibly **against
-> Anthropic's Consumer Terms** (their §3.7 restricts automated/scripted access).
-> In principle this could cause your Claude account to be rate-limited or flagged.
-> This tool minimizes that footprint (read-only, gentle polling, no token minting,
-> an honest `count-claudula/x.y.z` User-Agent), and if the endpoint ever starts
-> refusing requests the widget **stops polling entirely** instead of hammering it
-> (a manual ↻ re-arms it). Still: **you use it at your own risk** — read the Terms
-> and decide for yourself.
+> ⚠️ **Heads up on Anthropic's Terms — read this.** The **opt-in endpoint
+> source** (no longer the default — see below) uses your Claude Code OAuth token
+> to call `/api/oauth/usage`, an **internal/undocumented** endpoint. As of a **February 2026 clarification**,
+> Anthropic has **explicitly stated** that using an OAuth token from a Claude
+> Free/Pro/Max subscription *"in any other product, tool, or service … is not
+> permitted and constitutes a violation of the Consumer Terms of Service"* — and
+> their Consumer Terms (§3, *Use of our Services*) separately bar accessing the
+> Services *"through automated or non-human means, whether through a bot, script,
+> or otherwise"* except via an Anthropic API key. **Anthropic has been actively
+> enforcing this since January 2026, including account bans.** So this is not a
+> gray "plausibly" anymore: using this source **is** against the Consumer Terms.
+>
+> That enforcement targets **arbitrage** — running actual Claude *inference*
+> through unofficial harnesses to pay subscription prices for API-grade usage —
+> which this tool does **not** do: it makes no inference, mints/refreshes no
+> tokens, only issues one read-only GET for a status number, polls gently, sends
+> an honest `count-claudula/x.y.z` User-Agent, and **stops polling entirely** if
+> the endpoint ever refuses (a manual ↻ re-arms it). That keeps it far from the
+> traffic pattern that triggers bans — but the written rule has **no read-only or
+> usage-monitor carve-out**, and the risk is to **your** account. **Use this
+> source at your own risk.**
+>
+> **Want zero Terms risk?** You already have it by default: the **Claude Code
+> statusLine** source (Settings → Data source, described just below) does no token
+> read and no endpoint call. Reaching the endpoint source above is an explicit
+> opt-in; it buys always-fresh-when-idle updates and the per-model / paid-overage
+> bars, at the risk spelled out here.
 
-### Prefer zero endpoint? Use the statusLine source
+### The default source: Claude Code statusLine
 
-Settings → **Data source → Claude Code statusLine** switches the 5h/weekly bars
-to the data Claude Code itself pipes into its
+New installs use the data Claude Code itself pipes into its
 [statusLine](https://code.claude.com/docs/en/statusline) — a sanctioned channel,
-**no credential read, no endpoint call at all**. The widget writes a tiny capture
-script and shows you the exact command to set as `statusLine` in Claude Code's
-`settings.json`; the script also prints a usable status line (model + 5h/7d %).
-Trade-off: the numbers only refresh **while a Claude Code session is running**,
-they don't include usage from the web/desktop apps, and this source carries no
-paid extra-usage or per-model limit data — which is why the live endpoint
-remains the default.
+**no credential read, no endpoint call at all**. On first run the widget writes a
+tiny capture script and shows you (Settings → **Data source**) the exact command
+to set as `statusLine` in Claude Code's `settings.json` — a **one-time setup**;
+until you do it the widget shows a *"set up statusLine"* nudge. The script also
+prints a usable status line (model + 5h/7d %). Trade-off: the numbers only
+refresh **while a Claude Code session is running**, they don't include usage from
+the web/desktop apps, and this source carries no paid extra-usage or per-model
+limit data — those surfaces show as **N/A** in the detailed view (so you can tell
+"none" apart from "this source can't see it") — to get real numbers there, switch
+to the **endpoint** source (opt-in, with the Terms caveat above).
+
+**Upgrading from an earlier version?** If you were already on the endpoint, the
+widget keeps you there so your data source doesn't change under you — the new
+statusLine default only applies to fresh installs. Switch either way, any time,
+in Settings → Data source.
 
 ## 🔍 Don't trust — audit, or build it yourself
 

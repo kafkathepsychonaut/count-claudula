@@ -4,6 +4,7 @@ const api = window.claudeCount;
 let latest = null;            // last usage received
 let stale = false;            // last fetch failed -> showing stale data
 let expiredFlag = false;      // failed because the token expired (read-only mode)
+let setupFlag = false;        // statusLine source, but never wired up in Claude Code yet
 let nocredFlag = false;       // API-key / Console account: no subscription windows exist
 let unavailableFlag = false;  // circuit breaker tripped: the endpoint keeps refusing
 let countdownTimer = null;
@@ -189,6 +190,15 @@ function renderModels(u) {
   // keeps the per-model percentages instead of duplicating the money
   const el = $('models');
   el.className = 'models';
+  // The statusLine source can't see paid overage or per-model 7d caps. Mark them
+  // explicitly N/A (the row is already dim) rather than leaving it blank, which
+  // would read as "you have none" — that data only exists on the endpoint source.
+  // The tooltip says why; the same note also sits under the source picker.
+  if (u.partial) {
+    el.textContent = t('overage') + ' N/A · opus N/A · sonnet N/A';
+    el.title = t('source_scope_note');
+    return;
+  }
   const parts = [];
   if (u.sevenDayOpus && u.sevenDayOpus.utilization > 0) parts.push('opus ' + u.sevenDayOpus.utilization + '%');
   if (u.sevenDaySonnet && u.sevenDaySonnet.utilization > 0) parts.push('sonnet ' + u.sevenDaySonnet.utilization + '%');
@@ -276,7 +286,14 @@ function renderStatus(u) {
     // expired = token went stale; it's a normal idle state (Claude Code refreshes
     // it), so nudge calmly with the fix in the tooltip rather than an alarming red.
     // expired wins over unavailable: reopening Claude Code is the fix for both.
-    if (expiredFlag) {
+    if (setupFlag) {
+      // statusLine source chosen (the ToS-clean default) but Claude Code has
+      // never piped a payload here yet — the fix is a one-time setup in Settings,
+      // not "open Claude Code". Point there instead of the misleading idle nudge.
+      el.textContent = t('setup');
+      el.title = t('setup_hint');
+      el.className = 'status idle';
+    } else if (expiredFlag) {
       el.textContent = t('expired');
       el.title = t('expired_hint');
       el.className = 'status idle';
@@ -525,15 +542,17 @@ api.onUsage((u) => {
   latest = u;
   stale = false;
   expiredFlag = false;
+  setupFlag = false;
   nocredFlag = false;
   unavailableFlag = false;
   stopSpin();
   renderAll();
 });
 
-api.onError(({ last, expired, noCredential, unavailable }) => {
+api.onError(({ last, expired, needsSetup, noCredential, unavailable }) => {
   stale = true;
   expiredFlag = !!expired;
+  setupFlag = !!needsSetup;
   nocredFlag = !!noCredential;
   unavailableFlag = !!unavailable;
   if (last) latest = last;

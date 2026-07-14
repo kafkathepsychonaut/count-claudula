@@ -20,6 +20,7 @@ const H_EXT_MORE = 600;   // fallback: fine-detail pane open
 const H_EXT_MAX = 760;    // sanity cap for renderer-reported heights
 const H_COLLAPSED = 60;
 const POLL_ACTIVE_MS = 180 * 1000;  // 3 min — the data changes slowly; gentle on the endpoint's rate limit
+const POLL_STATUSLINE_MS = 60 * 1000; // statusLine is a LOCAL file read (no rate limit): the file watcher drives real-time updates, so this timer is only a staleness/countdown fallback and can be far tighter than the endpoint cadence
 const POLL_ERROR_MS = 90 * 1000;    // 90s for NETWORK error (429 uses its own exponential backoff)
 // Circuit breaker: this many consecutive server 4xx rejections (other than 429)
 // and we stop hitting the endpoint instead of hammering one that said no — if
@@ -129,6 +130,22 @@ function migrateLegacyState() {
   } catch (_) { /* fresh defaults are an acceptable fallback */ }
 }
 
+// The default data source flipped to 'statusline' (ToS-clean). An existing
+// install that never chose a source was silently using the endpoint;
+// don't yank it out from under them into a source that needs manual setup —
+// pin 'endpoint' once for anyone who already has state. Brand-new installs (no
+// state file yet) fall through to the new statusline default. Runs after
+// migrateLegacyState() so a legacy-migrated user counts as existing.
+function migrateSourceDefault() {
+  try {
+    if (!fs.existsSync(STATE_FILE)) return;        // fresh install: new default applies
+    const s = loadState();
+    const src = s.settings && s.settings.source;
+    if (src === 'endpoint' || src === 'statusline') return; // already an explicit choice
+    saveState({ settings: { ...(s.settings || {}), source: 'endpoint' } });
+  } catch (_) { /* worst case the widget shows the statusline setup nudge, not a crash */ }
+}
+
 function loadState() {
   try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (_) { return {}; }
 }
@@ -163,8 +180,11 @@ function getSettings() {
     language: s.language || 'auto',
     startWithOS: s.startWithOS === true, // off by default: it reads a credential + hits Anthropic at boot
     theme: (s.theme === 'bloodthirsty' || s.theme === 'zombie') ? s.theme : 'classic',
-    // 'endpoint' (live, all surfaces) | 'statusline' (Claude Code only, no endpoint)
-    source: s.source === 'statusline' ? 'statusline' : 'endpoint',
+    // 'statusline' (Claude Code only, no endpoint — the ToS-clean default) |
+    // 'endpoint' (live, all surfaces, but automated access to an internal endpoint).
+    // New installs default to statusline; existing installs are pinned to whatever
+    // they were using by migrateSourceDefault(), so this default only reaches them.
+    source: s.source === 'endpoint' ? 'endpoint' : 'statusline',
   };
 }
 function setSetting(key, val) {
@@ -364,12 +384,12 @@ async function poll() {
       } catch (err) {
         lastError = {
           message: err.message, expired: !!err.expired, noCredential: !!err.noCredential,
-          at: Date.now(), last: lastGood,
+          needsSetup: !!err.needsSetup, at: Date.now(), last: lastGood,
         };
         if (win) win.webContents.send('usage:error', lastError);
         updateTrayTitleStale();
       }
-      scheduleNext(POLL_ACTIVE_MS);
+      scheduleNext(POLL_STATUSLINE_MS);
       return;
     }
     if (!allowNetwork) {
@@ -800,6 +820,7 @@ if (!gotLock) {
     if (process.platform === 'win32') app.setAppUserModelId('com.countclaudula.app');
     setCacheDir(app.getPath('userData')); // JSONL aggregation survives restarts
     migrateLegacyState();
+    migrateSourceDefault(); // pin existing installs to their source before the new default applies
     restorePaceSamples();  // warm the burn-rate buffer so the hint isn't blank after a restart
     createWindow();
     buildTray();

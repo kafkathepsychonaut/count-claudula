@@ -35,9 +35,15 @@ process.stdin.on('data', (c) => { raw += c; });
 process.stdin.on('end', () => {
   let j = {};
   try { j = JSON.parse(raw); } catch (_) {}
+  // Atomic write: temp file (unique per pid so concurrent Claude Code sessions
+  // don't clobber each other's temp) then rename over the target. A reader — the
+  // widget's file watcher or timed poll — never sees a half-written file.
+  const out = path.join(__dirname, 'statusline.json');
+  const tmp = out + '.' + process.pid + '.tmp';
   try {
-    fs.writeFileSync(path.join(__dirname, 'statusline.json'), JSON.stringify({ at: Date.now(), data: j }));
-  } catch (_) {}
+    fs.writeFileSync(tmp, JSON.stringify({ at: Date.now(), data: j }));
+    fs.renameSync(tmp, out);
+  } catch (_) { try { fs.unlinkSync(tmp); } catch (_) {} }
   const rl = (j && j.rate_limits) || {};
   const p = (w) => (w && w.used_percentage != null) ? Math.round(w.used_percentage) + '%' : '--';
   const model = (j && j.model && (j.model.display_name || j.model.id)) || '';
@@ -63,18 +69,42 @@ function captureCommand(userData) {
 // Throws (like fetchUsage) when there's no usable data:
 //   .expired = true  -> no capture yet, or capture too old ("open Claude Code")
 function readStatusline(userData) {
+  let raw;
+  try {
+    raw = fs.readFileSync(captureFile(userData), 'utf8');
+  } catch (_) {
+    // No capture file at all: Claude Code has never piped its statusLine here, so
+    // this source isn't wired up yet. Distinct from a stale capture ("open Claude
+    // Code") — the fix is a one-time setup, so signal it separately for the UI.
+    const e = new Error('statusline not set up yet'); e.expired = true; e.needsSetup = true; throw e;
+  }
   let j;
   try {
-    j = JSON.parse(fs.readFileSync(captureFile(userData), 'utf8'));
+    j = JSON.parse(raw);
   } catch (_) {
-    const e = new Error('no statusline capture yet'); e.expired = true; throw e;
+    // File EXISTS but won't parse — almost always a torn read of a mid-write file.
+    // The capture writes atomically now, but a pre-fix script still on disk (or a
+    // rename that lost a race) can land here. Treat as a transient blip, NOT
+    // needsSetup: a configured widget must not flash "set up statusLine" over one
+    // bad read. Falls through to the generic stale/expired handling.
+    const e = new Error('statusline capture unreadable (mid-write?)'); e.expired = true; throw e;
   }
   if (!j || typeof j.at !== 'number' || Date.now() - j.at > STALE_MS) {
     const e = new Error('statusline data stale'); e.expired = true; throw e;
   }
   const rl = (j.data && j.data.rate_limits) || {};
+  // The statusLine payload carries resets_at as a Unix epoch in SECONDS (e.g.
+  // 1784005800), whereas the endpoint reports an ISO string. The renderer's
+  // countdown does new Date(resetsAt), which reads a bare number as
+  // milliseconds — landing in 1970 and showing "resetting…" forever. Normalize
+  // seconds -> ISO here so both sources hand the renderer the same shape.
+  const toIso = (v) => {
+    if (v == null) return null;
+    if (typeof v === 'number') return new Date(v * 1000).toISOString();
+    return v; // already a string (future-proof if the payload ever sends ISO)
+  };
   const norm = (w) => (w && typeof w.used_percentage === 'number')
-    ? { utilization: Math.round(w.used_percentage), resetsAt: w.resets_at || null }
+    ? { utilization: Math.round(w.used_percentage), resetsAt: toIso(w.resets_at) }
     : null;
   const fiveHour = norm(rl.five_hour);
   const sevenDay = norm(rl.seven_day);
@@ -96,6 +126,10 @@ function readStatusline(userData) {
     sevenDaySonnet: null,
     limits: [],
     overage: { enabled: false },
+    // This source can't see paid overage or per-model 7d caps (they live only on
+    // the endpoint). Flag it so the widget marks those surfaces "N/A" instead of
+    // rendering them blank — a blank row reads as "you have none", which is wrong.
+    partial: true,
   };
 }
 
