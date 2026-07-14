@@ -97,7 +97,9 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
 > the endpoint ever refuses (a manual ↻ re-arms it). That keeps it far from the
 > traffic pattern that triggers bans — but the written rule has **no read-only or
 > usage-monitor carve-out**, and the risk is to **your** account. **Use this
-> source at your own risk.**
+> source at your own risk.** Switching to it in Settings → Data source surfaces
+> this warning and requires an explicit *"I understand — use it"* confirmation,
+> and the widget keeps a standing note while the endpoint source is active.
 >
 > **Want zero Terms risk?** You already have it by default: the **Claude Code
 > statusLine** source (Settings → Data source, described just below) does no token
