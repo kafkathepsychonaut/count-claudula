@@ -93,6 +93,49 @@ async function init() {
       setTimeout(() => { c.textContent = ''; }, 1500);
     } catch (_) { /* text is selected; Ctrl+C still works */ }
   });
+  // --- one-click statusLine setup: write the command into Claude Code's
+  // settings.json for the user (with a confirm before replacing an existing
+  // statusLine, and a warning if `node` isn't on PATH so it wouldn't run). ---
+  const slApply = document.getElementById('sl-apply');
+  const slStatus = document.getElementById('sl-status');
+  const slConfirm = document.getElementById('sl-confirm');
+  const slConfirmCmd = document.getElementById('sl-confirm-cmd');
+  const setSl = (key, cls) => { slStatus.textContent = key ? window.I18N.t(locale, key) : ''; slStatus.className = 'sl-status' + (cls ? ' ' + cls : ''); };
+  const doApply = async (nodeOk) => {
+    setSl('sl_working');
+    let r = {};
+    try { r = await api.statuslineApply(); } catch (_) {}
+    if (r && r.ok) setSl(nodeOk ? 'sl_done' : 'sl_done_no_node', nodeOk ? 'ok' : 'warn');
+    else if (r && r.error === 'unreadable') setSl('sl_err_unreadable', 'warn');
+    else setSl('sl_err_write', 'warn');
+  };
+  slApply.addEventListener('click', async () => {
+    slConfirm.style.display = 'none';
+    setSl('sl_working');
+    let info = {};
+    try { info = await api.statuslineInspect(); } catch (_) { setSl('sl_err_write', 'warn'); return; }
+    if (info.unreadable) { setSl('sl_err_unreadable', 'warn'); return; }
+    if (info.isMine) { setSl('sl_already', 'ok'); return; }
+    if (info.currentCmd) {
+      // an existing custom statusLine — confirm before replacing it
+      setSl('');
+      slConfirmCmd.textContent = info.currentCmd;
+      slConfirm.dataset.nodeok = info.nodeOk ? '1' : '';
+      slConfirm.style.display = '';
+      return;
+    }
+    await doApply(info.nodeOk);
+  });
+  document.getElementById('sl-confirm-yes').addEventListener('click', async () => {
+    const nodeOk = slConfirm.dataset.nodeok === '1';
+    slConfirm.style.display = 'none';
+    await doApply(nodeOk);
+  });
+  document.getElementById('sl-confirm-no').addEventListener('click', () => {
+    slConfirm.style.display = 'none';
+    setSl('');
+  });
+
   document.getElementById('btn-close').addEventListener('click', () => api.settingsClose());
   document.getElementById('btn-donate').addEventListener('click', () => api.donate());
 

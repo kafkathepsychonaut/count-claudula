@@ -229,6 +229,22 @@
   };
   for (const k in SETUP_HINT) if (DICT[k]) DICT[k].setup_hint = SETUP_HINT[k];
 
+  // One-click statusLine setup (Settings): write the command into Claude Code's
+  // settings.json for the user. en/pt for now; other locales fall back to en.
+  const SL = {
+    sl_configure:    { en: 'Configure automatically',                                pt: 'Configurar automaticamente' },
+    sl_working:      { en: 'Writing…',                                               pt: 'Gravando…' },
+    sl_done:         { en: '✓ statusLine configured in Claude Code',                 pt: '✓ statusLine configurado no Claude Code' },
+    sl_done_no_node: { en: '✓ written — but `node` isn’t on your PATH, so Claude Code can’t run it yet (install Node)', pt: '✓ gravado — mas `node` não está no seu PATH, então o Claude Code ainda não roda (instale o Node)' },
+    sl_already:      { en: '✓ already configured',                                   pt: '✓ já está configurado' },
+    sl_replace_q:    { en: 'You already have a statusLine set in Claude Code. Replace it?', pt: 'Você já tem um statusLine no Claude Code. Substituir?' },
+    sl_replace:      { en: 'Replace',                                                pt: 'Substituir' },
+    sl_cancel:       { en: 'Cancel',                                                 pt: 'Cancelar' },
+    sl_err_unreadable: { en: 'Your settings.json isn’t valid JSON — left untouched; edit it by hand', pt: 'Seu settings.json não é JSON válido — não foi alterado; edite à mão' },
+    sl_err_write:    { en: 'Couldn’t write settings.json',                           pt: 'Não consegui gravar o settings.json' },
+  };
+  for (const key in SL) for (const k in SL[key]) if (DICT[k]) DICT[k][key] = SL[key][k];
+
   // paid overage (prefix before the amount: "extra R$12,30")
   const OVERAGE = {
     en: 'extra', es: 'extra', pt: 'extra', fr: 'extra', de: 'Zusatz', it: 'extra',

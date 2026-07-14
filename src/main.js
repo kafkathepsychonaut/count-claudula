@@ -5,6 +5,7 @@ const path = require('path');
 const { fetchUsage, credPath } = require('./usage');
 const { todayUsage, setCacheDir, flushCache } = require('./usage-jsonl');
 const { readStatusline, ensureCaptureScript, captureCommand } = require('./usage-statusline');
+const claudeSettings = require('./claude-settings');
 const { makeTrayIcon } = require('./icon');
 const i18n = require('./renderer/i18n');
 const { autoUpdater } = require('electron-updater');
@@ -775,6 +776,23 @@ ipcMain.handle('settings:get', () => ({
   appVersion: app.getVersion(),
 }));
 ipcMain.handle('update:check', () => runManualCheck());
+// One-click statusLine setup: inspect first (so the renderer can confirm before
+// replacing an existing statusLine and warn if node is missing), then apply.
+ipcMain.handle('statusline:inspect', () => {
+  const cmd = captureCommand(app.getPath('userData'));
+  return { ...claudeSettings.inspect(cmd), nodeOk: claudeSettings.nodeAvailable() };
+});
+ipcMain.handle('statusline:apply', () => {
+  const cmd = captureCommand(app.getPath('userData'));
+  ensureCaptureScript(app.getPath('userData')); // guarantee the script is on disk before we point Claude Code at it
+  const res = claudeSettings.apply(cmd);
+  if (res.ok) {
+    // make sure the widget is actually reading this source, then re-poll
+    if (getSettings().source !== 'statusline') { setSetting('source', 'statusline'); watchStatusline(); }
+    pollNow();
+  }
+  return res;
+});
 ipcMain.on('settings:set', (_e, payload) => {
   const { k, v } = payload || {}; // tolerate a malformed/empty payload
   if (!validSetting(k, v)) return; // reject unknown key / invalid value

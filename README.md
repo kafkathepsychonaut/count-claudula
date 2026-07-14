@@ -112,7 +112,10 @@ New installs use the data Claude Code itself pipes into its
 **no credential read, no endpoint call at all**. On first run the widget writes a
 tiny capture script and shows you (Settings → **Data source**) the exact command
 to set as `statusLine` in Claude Code's `settings.json` — a **one-time setup**;
-until you do it the widget shows a *"set up statusLine"* nudge. The script also
+until you do it the widget shows a *"set up statusLine"* nudge. **Configure
+automatically** writes it into `settings.json` for you (it backs the file up,
+merges rather than overwrites, asks before replacing an existing statusLine, and
+warns if `node` isn't on your PATH). The script also
 prints a usable status line (model + 5h/7d %). Trade-off: the numbers only
 refresh **while a Claude Code session is running**, they don't include usage from
 the web/desktop apps, and this source carries no paid extra-usage or per-model

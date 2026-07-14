@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('claudeCount', {
   settingsSet: (k, v) => ipcRenderer.send('settings:set', { k, v }),
   settingsClose: () => ipcRenderer.send('settings:close'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
+  statuslineInspect: () => ipcRenderer.invoke('statusline:inspect'),
+  statuslineApply: () => ipcRenderer.invoke('statusline:apply'),
   sendFeedback: (text) => ipcRenderer.invoke('feedback:send', text),
   donate: () => ipcRenderer.send('ui:donate'),
 });

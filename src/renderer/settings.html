@@ -72,6 +72,15 @@
     button.upd-btn { font: inherit; font-size: 12px; color: var(--ink); background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
     button.upd-btn:hover { background: var(--hover); }
     button.upd-btn:disabled { opacity: 0.5; cursor: default; }
+    .upd-status.warn { color: var(--coral); opacity: 0.9; }
+    .sl-setup { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+    .sl-status { font-size: 10.5px; color: var(--ink-dim); line-height: 1.3; }
+    .sl-status.ok { color: var(--coral); }
+    .sl-status.warn { color: var(--coral); }
+    .sl-confirm { margin-top: 6px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--ivory-soft); }
+    .sl-confirm-msg { font-size: 10.5px; color: var(--ink); line-height: 1.4; }
+    .sl-confirm-cmd { font-family: Consolas, "Cascadia Mono", monospace; font-size: 9.5px; color: var(--ink-dim); word-break: break-all; margin: 5px 0 7px; }
+    .sl-confirm-row { display: flex; gap: 8px; }
     .fb { gap: 6px; margin-top: 2px; }
     .fb > label { font-size: 13px; }
     textarea { font: inherit; font-size: 12px; color: var(--ink); background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; resize: none; width: 100%; }
@@ -115,6 +124,18 @@
     <div class="hint" id="source-hint" style="display: none;">
       <span data-i18n="source_hint">Use this command as your statusLine in Claude Code (settings.json). Data refreshes only while Claude Code is running.</span>
       <input class="cmd" id="source-cmd" readonly /><span class="copied" id="source-copied"></span>
+      <div class="sl-setup">
+        <button class="upd-btn" id="sl-apply" data-i18n="sl_configure">Configure automatically</button>
+        <span class="sl-status" id="sl-status"></span>
+      </div>
+      <div class="sl-confirm" id="sl-confirm" style="display: none;">
+        <div class="sl-confirm-msg" data-i18n="sl_replace_q">You already have a statusLine set in Claude Code. Replace it?</div>
+        <div class="sl-confirm-cmd" id="sl-confirm-cmd"></div>
+        <div class="sl-confirm-row">
+          <button class="upd-btn" id="sl-confirm-yes" data-i18n="sl_replace">Replace</button>
+          <button class="upd-btn" id="sl-confirm-no" data-i18n="sl_cancel">Cancel</button>
+        </div>
+      </div>
       <div data-i18n="source_scope_note">this source has no paid extra-usage or per-model limit data — those need the Anthropic endpoint</div>
     </div>
 
