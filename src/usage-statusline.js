@@ -3,11 +3,21 @@
 // user's statusLine command on every status update, and that payload carries
 // rate_limits (the same 5h/7d percentages the endpoint reports) — no
 // credential read, no network. A tiny capture script (written to userData when
-// the user enables this source) persists each payload; we read the file here.
+// the user enables this source) persists each payload; we read the files here.
 //
-// Trade-off vs the endpoint (why this is opt-in, not the default): the data
-// only refreshes while a Claude Code session is active, and it doesn't see
-// usage from web/desktop.
+// MULTI-SESSION: every Claude Code window shares the same settings.json, so they
+// all run the same statusLine command. If they all wrote ONE file, the last
+// writer would win and the widget would flicker between each session's
+// last-seen snapshot (a session that hasn't made an API call in a while reports
+// a staler, lower %). So each session writes its OWN file (statusline.<id>.json)
+// and readStatusline aggregates across them: for each window it takes the MAX
+// utilization among fresh sessions in the current window. Usage only climbs
+// within a window (until reset), so the max is the freshest truth and never
+// dips — 20 open windows make the data fresher, not broken.
+//
+// Trade-off vs the endpoint (why this is opt-in for some): the data only
+// refreshes while a Claude Code session is active, and it doesn't see usage
+// from web/desktop between those refreshes.
 
 const fs = require('fs');
 const path = require('path');
@@ -15,9 +25,20 @@ const path = require('path');
 // No Claude Code session for a while => the percentages are too old to show
 // as live. Surfaced like an expired token: "open Claude Code" is the fix.
 const STALE_MS = 2 * 60 * 60 * 1000;
+// Dead-session files older than this are swept on read (only while a fresh file
+// exists, so we never delete the last signal). One file per session run would
+// otherwise accumulate forever.
+const PRUNE_MS = 24 * 60 * 60 * 1000;
 
 function captureFile(userData) { return path.join(userData, 'statusline.json'); }
 function scriptFile(userData) { return path.join(userData, 'statusline-capture.js'); }
+
+// True for a persisted capture file — the legacy single file or a per-session
+// one (statusline.<id>.json). Excludes the capture script and *.tmp writes.
+// Shared with main.js's file watcher so both agree on what to react to.
+function isCaptureFileName(name) {
+  return name === 'statusline.json' || /^statusline\..+\.json$/.test(name);
+}
 
 // The standalone capture script. It must live as a real file on disk (a
 // packaged app's sources are inside app.asar, which the system node can't
@@ -26,8 +47,9 @@ function scriptFile(userData) { return path.join(userData, 'statusline-capture.j
 // usable statusLine on its own.
 const CAPTURE_SRC = `'use strict';
 // Count Claudula statusline capture. Claude Code pipes its statusLine JSON to
-// this script's stdin; it saves the payload next to itself (statusline.json,
-// read by the Count Claudula widget) and prints a compact status line.
+// this script's stdin; it saves the payload next to itself and prints a compact
+// status line. Each Claude Code session writes its OWN file (statusline.<id>.json)
+// so concurrent windows don't clobber each other — the widget aggregates them.
 const fs = require('fs');
 const path = require('path');
 let raw = '';
@@ -35,10 +57,12 @@ process.stdin.on('data', (c) => { raw += c; });
 process.stdin.on('end', () => {
   let j = {};
   try { j = JSON.parse(raw); } catch (_) {}
-  // Atomic write: temp file (unique per pid so concurrent Claude Code sessions
-  // don't clobber each other's temp) then rename over the target. A reader — the
-  // widget's file watcher or timed poll — never sees a half-written file.
-  const out = path.join(__dirname, 'statusline.json');
+  // Per-session filename keyed by the payload's session_id (sanitized). Without
+  // one (older Claude Code), fall back to the legacy single file.
+  const sid = (j && typeof j.session_id === 'string') ? j.session_id.replace(/[^a-zA-Z0-9_-]/g, '') : '';
+  const out = path.join(__dirname, sid ? ('statusline.' + sid + '.json') : 'statusline.json');
+  // Atomic write: temp file (unique per pid) then rename over the target, so a
+  // reader (the widget's watcher or poll) never sees a half-written file.
   const tmp = out + '.' + process.pid + '.tmp';
   try {
     fs.writeFileSync(tmp, JSON.stringify({ at: Date.now(), data: j }));
@@ -52,7 +76,7 @@ process.stdin.on('end', () => {
 `;
 
 // Write (or refresh) the capture script; returns its path. Called when the
-// user switches the data source to statusline.
+// user switches the data source to statusline, and at boot.
 function ensureCaptureScript(userData) {
   const fp = scriptFile(userData);
   try { fs.writeFileSync(fp, CAPTURE_SRC); } catch (_) { /* surfaced as missing data */ }
@@ -64,62 +88,102 @@ function captureCommand(userData) {
   return 'node "' + scriptFile(userData) + '"';
 }
 
-// Read the last captured payload and map it to the same shape fetchUsage()
-// returns, so the renderer doesn't care where the data came from.
+// resets_at arrives as a Unix epoch in SECONDS from the statusLine payload (the
+// endpoint uses an ISO string). Normalize both to epoch seconds for comparison.
+function toEpochSec(v) {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') { const t = Date.parse(v); return Number.isFinite(t) ? Math.floor(t / 1000) : null; }
+  return null;
+}
+
+// Aggregate one window (five_hour / seven_day) across every fresh session
+// payload. The current window is the one with the latest reset boundary; among
+// sessions reporting that window, the max utilization is the freshest value
+// (usage only rises until reset). Older-window entries (a session whose last
+// API call predates a reset) are dropped, so a reset isn't masked by a stale
+// high number. Returns { utilization, resetsAt(ISO) } or null.
+function aggregateWindow(entries, key) {
+  const ws = [];
+  for (const e of entries) {
+    const w = ((e.data && e.data.rate_limits) || {})[key];
+    if (w && typeof w.used_percentage === 'number') {
+      ws.push({ pct: w.used_percentage, reset: toEpochSec(w.resets_at) });
+    }
+  }
+  if (!ws.length) return null;
+  let curReset = null;
+  for (const x of ws) if (x.reset != null && (curReset == null || x.reset > curReset)) curReset = x.reset;
+  let maxPct = -Infinity;
+  for (const x of ws) {
+    if (curReset != null && x.reset !== curReset) continue; // stale / pre-reset window
+    if (x.pct > maxPct) maxPct = x.pct;
+  }
+  if (maxPct === -Infinity) return null;
+  return { utilization: Math.round(maxPct), resetsAt: curReset != null ? new Date(curReset * 1000).toISOString() : null };
+}
+
+// Read every session's capture file and fold them into the same shape
+// fetchUsage() returns, so the renderer doesn't care where the data came from.
 // Throws (like fetchUsage) when there's no usable data:
-//   .expired = true  -> no capture yet, or capture too old ("open Claude Code")
+//   .needsSetup -> no capture file at all (statusLine never wired up)
+//   .expired    -> files exist but are all stale/unreadable ("open Claude Code")
+//   .noCredential -> fresh capture(s) but no rate_limits (API-key / Console)
 function readStatusline(userData) {
-  let raw;
-  try {
-    raw = fs.readFileSync(captureFile(userData), 'utf8');
-  } catch (_) {
-    // No capture file at all: Claude Code has never piped its statusLine here, so
-    // this source isn't wired up yet. Distinct from a stale capture ("open Claude
-    // Code") — the fix is a one-time setup, so signal it separately for the UI.
+  let names;
+  try { names = fs.readdirSync(userData); }
+  catch (_) { names = []; }
+  const files = names.filter(isCaptureFileName).map((n) => path.join(userData, n));
+
+  if (!files.length) {
+    // Claude Code has never piped its statusLine here — a one-time setup, not a
+    // stale-data state. Signalled separately so the UI nudges "configure it".
     const e = new Error('statusline not set up yet'); e.expired = true; e.needsSetup = true; throw e;
   }
-  let j;
-  try {
-    j = JSON.parse(raw);
-  } catch (_) {
-    // File EXISTS but won't parse — almost always a torn read of a mid-write file.
-    // The capture writes atomically now, but a pre-fix script still on disk (or a
-    // rename that lost a race) can land here. Treat as a transient blip, NOT
-    // needsSetup: a configured widget must not flash "set up statusLine" over one
-    // bad read. Falls through to the generic stale/expired handling.
+
+  const now = Date.now();
+  const fresh = [];          // parsed payloads within STALE_MS
+  let parsedAny = false;     // at least one file was valid JSON
+  const stalePaths = [];     // fresh-enough to keep, too old to prune... tracked for sweep
+  for (const fp of files) {
+    let j;
+    try { j = JSON.parse(fs.readFileSync(fp, 'utf8')); }
+    catch (_) { continue; } // missing/torn/half-written — skip this one, others may be fine
+    if (!j || typeof j.at !== 'number') continue;
+    parsedAny = true;
+    if (now - j.at <= STALE_MS) fresh.push(j);
+    else if (now - j.at > PRUNE_MS) stalePaths.push(fp);
+  }
+
+  if (!parsedAny) {
+    // Every file failed to parse — almost always a torn read of a mid-write file.
+    // Transient blip, NOT needsSetup: a configured widget must not flash "set up
+    // statusLine" over one bad read.
     const e = new Error('statusline capture unreadable (mid-write?)'); e.expired = true; throw e;
   }
-  if (!j || typeof j.at !== 'number' || Date.now() - j.at > STALE_MS) {
+  if (!fresh.length) {
     const e = new Error('statusline data stale'); e.expired = true; throw e;
   }
-  const rl = (j.data && j.data.rate_limits) || {};
-  // The statusLine payload carries resets_at as a Unix epoch in SECONDS (e.g.
-  // 1784005800), whereas the endpoint reports an ISO string. The renderer's
-  // countdown does new Date(resetsAt), which reads a bare number as
-  // milliseconds — landing in 1970 and showing "resetting…" forever. Normalize
-  // seconds -> ISO here so both sources hand the renderer the same shape.
-  const toIso = (v) => {
-    if (v == null) return null;
-    if (typeof v === 'number') return new Date(v * 1000).toISOString();
-    return v; // already a string (future-proof if the payload ever sends ISO)
-  };
-  const norm = (w) => (w && typeof w.used_percentage === 'number')
-    ? { utilization: Math.round(w.used_percentage), resetsAt: toIso(w.resets_at) }
-    : null;
-  const fiveHour = norm(rl.five_hour);
-  const sevenDay = norm(rl.seven_day);
+
+  // Housekeeping: sweep long-dead session files, but only now that we have a
+  // fresh one, so we never delete the last remaining signal.
+  for (const fp of stalePaths) { try { fs.unlinkSync(fp); } catch (_) { /* best effort */ } }
+
+  const fiveHour = aggregateWindow(fresh, 'five_hour');
+  const sevenDay = aggregateWindow(fresh, 'seven_day');
   if (!fiveHour && !sevenDay) {
-    // A FRESH capture with no rate_limits means Claude Code is demonstrably
-    // running but the account has no subscription windows to report — an
-    // API-key / Console login. Signal it like the endpoint source does, so the
-    // widget switches to its cost-first layout instead of nagging
-    // "open Claude Code" at someone who has it open.
+    // Fresh capture(s) but no rate_limits anywhere: Claude Code is demonstrably
+    // running but the account has no subscription windows — an API-key / Console
+    // login. Signal it like the endpoint source does so the widget shows its
+    // cost-first layout instead of nagging "open Claude Code".
     const e = new Error('statusline payload has no rate_limits (API key / Console account)');
     e.noCredential = true;
     throw e;
   }
+
+  // "updated" reflects the freshest session's capture.
+  const fetchedAt = fresh.reduce((mx, j) => Math.max(mx, j.at), 0);
   return {
-    fetchedAt: j.at,
+    fetchedAt,
     fiveHour,
     sevenDay,
     sevenDayOpus: null,
@@ -133,4 +197,4 @@ function readStatusline(userData) {
   };
 }
 
-module.exports = { readStatusline, ensureCaptureScript, captureCommand, captureFile };
+module.exports = { readStatusline, ensureCaptureScript, captureCommand, captureFile, isCaptureFileName };

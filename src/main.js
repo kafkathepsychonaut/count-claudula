@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { fetchUsage, credPath } = require('./usage');
 const { todayUsage, setCacheDir, flushCache } = require('./usage-jsonl');
-const { readStatusline, ensureCaptureScript, captureCommand } = require('./usage-statusline');
+const { readStatusline, ensureCaptureScript, captureCommand, isCaptureFileName } = require('./usage-statusline');
 const claudeSettings = require('./claude-settings');
 const { makeTrayIcon } = require('./icon');
 const i18n = require('./renderer/i18n');
@@ -511,7 +511,7 @@ function watchStatusline() {
   if (getSettings().source !== 'statusline') return;
   try {
     slWatcher = fs.watch(app.getPath('userData'), (_evt, fname) => {
-      if (fname && fname !== 'statusline.json') return;
+      if (fname && !isCaptureFileName(fname)) return; // ignore the capture script, *.tmp, unrelated files
       clearTimeout(slDebounce);
       slDebounce = setTimeout(() => { if (!paused) pollNow(); }, 400);
     });

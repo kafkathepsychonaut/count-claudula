@@ -229,6 +229,14 @@
   };
   for (const k in SETUP_HINT) if (DICT[k]) DICT[k].setup_hint = SETUP_HINT[k];
 
+  // statusLine "updated HH:MM" hover: it's the last Claude Code activity, not a
+  // web-live figure. en/pt; other locales fall back to English via t().
+  const UPDATED_HINT = {
+    en: 'as of your last Claude Code activity — the statusLine source only refreshes while a session is generating, so it can trail Claude web while idle',
+    pt: 'referente à sua última atividade no Claude Code — a fonte statusLine só atualiza enquanto uma sessão está gerando, então pode ficar atrás do Claude web enquanto ocioso',
+  };
+  for (const k in UPDATED_HINT) if (DICT[k]) DICT[k].updated_hint = UPDATED_HINT[k];
+
   // One-click statusLine setup (Settings): write the command into Claude Code's
   // settings.json for the user. en/pt for now; other locales fall back to en.
   const SL = {

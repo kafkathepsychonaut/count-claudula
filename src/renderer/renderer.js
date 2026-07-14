@@ -316,12 +316,27 @@ function renderStatus(u) {
     }
     return;
   }
-  el.title = '';
+  // statusLine source (partial) only refreshes while a Claude Code session is
+  // actively generating — say so on hover so "updated HH:MM" isn't mistaken for
+  // web-live.
+  el.title = u.partial ? t('updated_hint') : '';
+  el.textContent = updatedText(u);
+  el.className = 'status';
+}
+
+// "updated HH:MM" — and, for the statusLine source once the data starts aging
+// (all sessions idle), a "· 14m" suffix so the line stops implying it's live.
+// Below the threshold it stays clean, so normal active use shows just the time.
+function updatedText(u) {
   const when = new Date(u.fetchedAt);
   const hh = String(when.getHours()).padStart(2, '0');
   const mm = String(when.getMinutes()).padStart(2, '0');
-  el.textContent = `${t('updated')} ${hh}:${mm}`;
-  el.className = 'status';
+  let s = `${t('updated')} ${hh}:${mm}`;
+  if (u.partial) {
+    const m = Math.floor((Date.now() - u.fetchedAt) / 60000);
+    if (m >= 2) s += ` · ${m < 60 ? m + 'm' : Math.floor(m / 60) + 'h'}`;
+  }
+  return s;
 }
 
 function renderAll() {
@@ -358,6 +373,8 @@ function startCountdown() {
     if (!latest || stale) return; // frozen while stale: a ticking countdown reads as live data
     if (latest.fiveHour) $('five-reset').textContent = fmtCountdown(latest.fiveHour.resetsAt);
     if (latest.sevenDay) $('seven-reset').textContent = fmtCountdown(latest.sevenDay.resetsAt);
+    // keep the statusLine "updated · Xm" age live between polls (all sessions idle)
+    if (latest.partial) { const s = $('status'); if (s && s.className === 'status') s.textContent = updatedText(latest); }
     // A window just rolled over: "resetting…" is only useful for seconds, not
     // for the up-to-3-minutes until the next timed poll — ask for fresh numbers
     // NOW. Latched per resetsAt value: an idle account whose endpoint keeps

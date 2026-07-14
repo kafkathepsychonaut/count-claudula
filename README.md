@@ -116,9 +116,14 @@ until you do it the widget shows a *"set up statusLine"* nudge. **Configure
 automatically** writes it into `settings.json` for you (it backs the file up,
 merges rather than overwrites, asks before replacing an existing statusLine, and
 warns if `node` isn't on your PATH). The script also
-prints a usable status line (model + 5h/7d %). Trade-off: the numbers only
-refresh **while a Claude Code session is running**, they don't include usage from
-the web/desktop apps, and this source carries no paid extra-usage or per-model
+prints a usable status line (model + 5h/7d %). Every open Claude Code window
+writes its own capture file and the widget **aggregates them** (highest reading
+in the current window wins), so running 20 sessions at once keeps the numbers
+fresh instead of flickering — it never dips below the truth. Trade-off: the
+numbers only refresh **while a Claude Code session is generating** (idle sessions
+don't update, so the "updated HH:MM" line grows a `· 14m` age once it starts
+trailing), they don't include usage from the web/desktop apps, and this source
+carries no paid extra-usage or per-model
 limit data — those surfaces show as **N/A** in the detailed view (so you can tell
 "none" apart from "this source can't see it") — to get real numbers there, switch
 to the **endpoint** source (opt-in, with the Terms caveat above).
