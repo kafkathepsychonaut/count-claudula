@@ -62,10 +62,21 @@ async function init() {
   const srcSel = document.getElementById('source');
   const srcHint = document.getElementById('source-hint');
   const srcCmd = document.getElementById('source-cmd');
-  srcSel.value = s.source === 'statusline' ? 'statusline' : 'endpoint';
+  const endpointConfirm = document.getElementById('endpoint-confirm');
+  const endpointNote = document.getElementById('endpoint-note');
+  srcSel.value = s.source === 'endpoint' ? 'endpoint' : 'statusline';
   srcCmd.value = data.statuslineCmd || '';
-  const syncSourceHint = () => { srcHint.style.display = srcSel.value === 'statusline' ? '' : 'none'; };
-  syncSourceHint();
+  // the source currently *saved* — so we can revert the dropdown if the user
+  // opens the endpoint but declines the ToS gate
+  let appliedSource = srcSel.value;
+  const syncSource = () => {
+    const isSL = srcSel.value === 'statusline';
+    const confirming = endpointConfirm.style.display !== 'none';
+    srcHint.style.display = isSL ? '' : 'none';
+    // standing ToS note stays up whenever endpoint is the applied source
+    endpointNote.style.display = (!isSL && !confirming) ? '' : 'none';
+  };
+  syncSource();
 
   applyLabels();
 
@@ -80,8 +91,28 @@ async function init() {
     api.settingsSet('startWithOS', e.target.checked);
   });
   srcSel.addEventListener('change', (e) => {
-    api.settingsSet('source', e.target.value);
-    syncSourceHint();
+    const v = e.target.value;
+    if (v === 'endpoint' && appliedSource !== 'endpoint') {
+      // don't switch yet — require explicit ToS consent first
+      endpointConfirm.style.display = '';
+      syncSource();
+      return;
+    }
+    endpointConfirm.style.display = 'none';
+    appliedSource = v;
+    api.settingsSet('source', v);
+    syncSource();
+  });
+  document.getElementById('endpoint-yes').addEventListener('click', () => {
+    endpointConfirm.style.display = 'none';
+    appliedSource = 'endpoint';
+    api.settingsSet('source', 'endpoint');
+    syncSource();
+  });
+  document.getElementById('endpoint-no').addEventListener('click', () => {
+    endpointConfirm.style.display = 'none';
+    srcSel.value = appliedSource; // revert the dropdown to what's actually saved
+    syncSource();
   });
   // click = select + copy (the command is long; make grabbing it painless)
   srcCmd.addEventListener('click', async () => {

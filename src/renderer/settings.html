@@ -81,6 +81,9 @@
     .sl-confirm-msg { font-size: 10.5px; color: var(--ink); line-height: 1.4; }
     .sl-confirm-cmd { font-family: Consolas, "Cascadia Mono", monospace; font-size: 9.5px; color: var(--ink-dim); word-break: break-all; margin: 5px 0 7px; }
     .sl-confirm-row { display: flex; gap: 8px; }
+    .src-warn { margin-top: 6px; padding: 8px; border: 1px solid var(--coral); border-radius: 8px; background: var(--ivory-soft); }
+    .src-warn-msg { font-size: 10.5px; color: var(--ink); line-height: 1.4; margin-bottom: 7px; }
+    .src-warn.note { color: var(--coral); font-size: 10px; line-height: 1.4; }
     .fb { gap: 6px; margin-top: 2px; }
     .fb > label { font-size: 13px; }
     textarea { font: inherit; font-size: 12px; color: var(--ink); background: var(--ivory-soft); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; resize: none; width: 100%; }
@@ -117,8 +120,8 @@
     <div class="field">
       <label data-i18n="set_source">Data source</label>
       <select id="source">
+        <option value="statusline">Claude Code statusLine (default)</option>
         <option value="endpoint">Anthropic endpoint</option>
-        <option value="statusline">Claude Code statusLine</option>
       </select>
     </div>
     <div class="hint" id="source-hint" style="display: none;">
@@ -138,6 +141,15 @@
       </div>
       <div data-i18n="source_scope_note">this source has no paid extra-usage or per-model limit data — those need the Anthropic endpoint</div>
     </div>
+    <!-- endpoint source: explicit ToS consent before switching, plus a standing note while it's active -->
+    <div class="src-warn" id="endpoint-confirm" style="display: none;">
+      <div class="src-warn-msg" data-i18n="endpoint_tos_warn">The Anthropic endpoint source reads your local Claude credential to call an internal usage endpoint. This is against Anthropic's Consumer Terms and has led to account bans — use it at your own risk.</div>
+      <div class="sl-confirm-row">
+        <button class="upd-btn" id="endpoint-yes" data-i18n="endpoint_understand">I understand — use it</button>
+        <button class="upd-btn" id="endpoint-no" data-i18n="sl_cancel">Cancel</button>
+      </div>
+    </div>
+    <div class="src-warn note" id="endpoint-note" style="display: none;" data-i18n="endpoint_tos_warn">The Anthropic endpoint source reads your local Claude credential to call an internal usage endpoint. This is against Anthropic's Consumer Terms and has led to account bans — use it at your own risk.</div>
 
     <div class="field" id="update-field" style="display: none;">
       <div class="field-col" style="gap: 2px;">

@@ -410,6 +410,16 @@ function showTip(el, text) {
 function hideTip() { $('tip').style.display = 'none'; }
 
 // One .bm-row: name | share% (dim) | $ — real grid columns so both align.
+// Share of total as a percentage string. Two decimals so the rows visibly add
+// up (integer rounding turned 92.44 / 7.34 / 0.22 into 92 / 7 / 0 — a sum of 99
+// with a real project shown as "0%"). A sub-0.01% but non-zero share reads
+// "<0.01" rather than a misleading "0.00".
+function pctStr(share) {
+  const p = share * 100;
+  if (p > 0 && p < 0.01) return '<0.01';
+  return p.toFixed(2);
+}
+
 function bmRow(name, pct, cost, tooltip) {
   const row = document.createElement('div');
   row.className = 'bm-row';
@@ -464,7 +474,7 @@ function renderTokens(tk) {
   for (const m of ['fable', 'opus', 'sonnet', 'haiku', 'other']) {
     const cost = bm[m] ? bm[m].cost : 0;
     if (!(cost > 0.005)) continue; // skip anything that would print $0.00
-    const pct = total > 0 ? Math.round((cost / total) * 100) : 0;
+    const pct = total > 0 ? pctStr(cost / total) : null;
     bmEl.appendChild(bmRow(m === 'other' ? t('tier_other') : m, pct, cost));
     bmCount++;
   }
@@ -481,7 +491,7 @@ function renderTokens(tk) {
   for (const [pathKey, v] of bp.slice(0, 3)) {
     const parts = pathKey.split(/[\\/]+/).filter(Boolean);
     const name = parts.length ? parts[parts.length - 1] : pathKey;
-    const pct = tk.cost > 0 ? Math.round((v.cost / tk.cost) * 100) : 0;
+    const pct = tk.cost > 0 ? pctStr(v.cost / tk.cost) : null;
     bpEl.appendChild(bmRow(name, pct, v.cost, pathKey));
   }
   $('byproject-wrap').classList.toggle('hidden', bp.length < 2);

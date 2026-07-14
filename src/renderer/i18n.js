@@ -242,6 +242,11 @@
     sl_cancel:       { en: 'Cancel',                                                 pt: 'Cancelar' },
     sl_err_unreadable: { en: 'Your settings.json isn’t valid JSON — left untouched; edit it by hand', pt: 'Seu settings.json não é JSON válido — não foi alterado; edite à mão' },
     sl_err_write:    { en: 'Couldn’t write settings.json',                           pt: 'Não consegui gravar o settings.json' },
+    endpoint_understand: { en: 'I understand — use it',                             pt: 'Entendo — usar mesmo assim' },
+    endpoint_tos_warn: {
+      en: "The Anthropic endpoint source reads your local Claude credential to call an internal usage endpoint. This is against Anthropic’s Consumer Terms and has led to account bans — use it at your own risk.",
+      pt: "A fonte Anthropic endpoint lê sua credencial local do Claude para chamar um endpoint interno de uso. Isso vai contra os Termos de Consumidor da Anthropic e já resultou em banimentos de conta — use por sua conta e risco.",
+    },
   };
   for (const key in SL) for (const k in SL[key]) if (DICT[k]) DICT[k][key] = SL[key][k];
 
