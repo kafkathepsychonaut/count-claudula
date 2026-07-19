@@ -3,3 +3,8 @@ dist/
 state.json
 *.log
 .DS_Store
+
+# Private working docs — never publish
+ROADMAP.md
+anthropic-tos-question.txt
+discord-announcement.md
