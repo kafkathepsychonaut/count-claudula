@@ -16,7 +16,8 @@ Get the latest from **[Releases ↗](../../releases/latest)**:
 - **Linux** — `Count-Claudula-x.y.z.AppImage`
 
 Requires Claude Code installed and logged in. The binaries are unsigned (see
-*Why isn't the `.exe` signed?* below). On an Intel Mac, build from source.
+*Why isn't the `.exe` signed?* and *macOS says the app "is damaged"* below).
+On an Intel Mac, build from source.
 
 ## What it shows
 
@@ -162,6 +163,17 @@ Code-signing certificates cost money and this is a free side project, so the
 prebuilt Windows binary is unsigned — SmartScreen warns "unknown publisher" on
 first launch (More info → Run anyway). For a tool that reads a credential file,
 if that bothers you, **build it from source.**
+
+## macOS says the app "is damaged"
+
+Same root cause: the `.dmg` isn't signed/notarized, and macOS Gatekeeper reports
+any unsigned browser download as *"damaged and can't be opened"*. The file is
+fine. Drag **Count Claudula** into Applications, then clear the quarantine flag
+in Terminal and open it normally:
+
+```bash
+xattr -cr "/Applications/Count Claudula.app"
+```
 
 ## Disclaimer
 
