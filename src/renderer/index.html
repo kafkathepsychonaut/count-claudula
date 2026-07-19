@@ -149,6 +149,34 @@
     .upd.dismissable .upd-x { display: inline-flex; }
     .upd .upd-x:hover { background: var(--hover); color: var(--ink); }
     body.has-upd:not(.collapsed) .upd { display: flex; }
+    /* First-run onboarding card: a fresh install shows no numbers until the
+       statusLine is wired up, so point straight at the one-click setup. Shown
+       once (dismiss or configure persists), auto-hides when data arrives. */
+    .onb {
+      display: none; margin: 0 13px 9px; padding: 9px 11px;
+      border: 1px solid var(--coral); border-radius: 10px;
+      background: var(--hover); -webkit-app-region: no-drag;
+    }
+    body.has-onb:not(.collapsed) .onb { display: block; }
+    .onb-title { font-size: 11.5px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
+    .onb-text { font-size: 10.5px; color: var(--ink-dim); line-height: 1.4; }
+    .onb-status { font-size: 10.5px; line-height: 1.4; margin-top: 6px; }
+    .onb-status.ok { color: var(--lvl-ok); font-weight: 600; }
+    .onb-status.warn { color: var(--lvl-warn); }
+    .onb-status:empty { display: none; }
+    .onb-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .onb-go {
+      font: inherit; font-size: 11px; font-weight: 650; color: #fff;
+      background: var(--coral); border: none; border-radius: 7px;
+      padding: 5px 11px; cursor: pointer;
+    }
+    .onb-go:hover { filter: brightness(1.05); }
+    .onb-later {
+      font: inherit; font-size: 10.5px; color: var(--ink-dim);
+      background: transparent; border: none; cursor: pointer;
+      text-decoration: underline dotted; text-underline-offset: 2px;
+    }
+    .onb-later:hover { color: var(--ink); }
     .ext-toggle .chev { display: inline-block; transition: transform 0.15s ease; font-size: 9px; }
     body.ext-more .ext-toggle .chev { transform: rotate(180deg); }
     #ext-more { display: none; flex-direction: column; }
@@ -230,6 +258,16 @@
 
     <div id="upd" class="upd" role="button" tabindex="0">
       <span class="upd-ico">&#x2b73;</span><span id="upd-label" class="upd-label"></span><span id="upd-x" class="upd-x" role="button" tabindex="0" aria-label="dismiss">&#x2715;</span>
+    </div>
+
+    <div id="onb" class="onb">
+      <div class="onb-title" data-i18n="ob_title">One-time setup</div>
+      <div class="onb-text" data-i18n="ob_text">The widget reads its numbers from Claude Code&rsquo;s statusLine. Wire it up once and you&rsquo;re set.</div>
+      <div id="onb-status" class="onb-status"></div>
+      <div class="onb-row">
+        <button id="onb-go" class="onb-go" data-i18n="sl_configure">Configure automatically</button>
+        <button id="onb-later" class="onb-later" data-i18n="ob_later">Later</button>
+      </div>
     </div>
 
     <div id="body" class="body">

@@ -258,6 +258,28 @@
   };
   for (const key in SL) for (const k in SL[key]) if (DICT[k]) DICT[k][key] = SL[key][k];
 
+  // First-run onboarding card (widget): a fresh install shows nothing until the
+  // statusLine is wired up, so walk the user straight to the one-click setup
+  // instead of hoping they find Settings → Data source. en/pt for now; other
+  // locales fall back to English via t().
+  const OB = {
+    ob_title: { en: 'One-time setup', pt: 'Configuração única' },
+    ob_text: {
+      en: 'The widget reads its numbers from Claude Code’s statusLine. Wire it up once and you’re set.',
+      pt: 'O widget lê os números do statusLine do Claude Code. Configure uma vez e pronto.',
+    },
+    ob_later: { en: 'Later', pt: 'Depois' },
+    ob_done: {
+      en: '✓ Done — now open Claude Code and send any message; the numbers appear when it responds.',
+      pt: '✓ Pronto — abra o Claude Code e envie qualquer mensagem; os números aparecem quando ele responder.',
+    },
+    ob_insettings: {
+      en: 'You already have a statusLine set in Claude Code — finish in Settings → Data source.',
+      pt: 'Você já tem um statusLine no Claude Code — conclua em Configurações → Fonte de dados.',
+    },
+  };
+  for (const key in OB) for (const k in OB[key]) if (DICT[k]) DICT[k][key] = OB[key][k];
+
   // paid overage (prefix before the amount: "extra R$12,30")
   const OVERAGE = {
     en: 'extra', es: 'extra', pt: 'extra', fr: 'extra', de: 'Zusatz', it: 'extra',

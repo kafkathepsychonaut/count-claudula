@@ -25,6 +25,7 @@ contextBridge.exposeInMainWorld('claudeCount', {
   hide: () => ipcRenderer.send('ui:hide'),
   quit: () => ipcRenderer.send('ui:quit'),
   openSettings: () => ipcRenderer.send('ui:settings'),
+  onboarded: () => ipcRenderer.send('ui:onboarded'),
   // settings
   settingsGet: () => ipcRenderer.invoke('settings:get'),
   settingsSet: (k, v) => ipcRenderer.send('settings:set', { k, v }),

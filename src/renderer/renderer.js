@@ -7,6 +7,8 @@ let expiredFlag = false;      // failed because the token expired (read-only mod
 let setupFlag = false;        // statusLine source, but never wired up in Claude Code yet
 let nocredFlag = false;       // API-key / Console account: no subscription windows exist
 let unavailableFlag = false;  // circuit breaker tripped: the endpoint keeps refusing
+let onboardPending = false;   // fresh install: show the first-run setup card when needsSetup arrives
+let onbMsg = null;            // dynamic status line on that card: { key, cls } (re-translated on locale switch)
 let countdownTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -37,6 +39,7 @@ function applyI18n(loc) {
   applyMode(mode);          // re-translate the mode button title
   applyExtMore(extMore);    // re-translate the more/less toggle
   renderUpdate();           // re-translate the update banner
+  renderOnbMsg();           // re-translate the onboarding card's status line
   syncHeroHint();           // account-dependent tooltip on the cost row
   renderAll();              // re-translate dynamic status/reset (also the no-data error state)
   if (lastTk) renderTokens(lastTk); // re-translate rows + locale number formats
@@ -394,8 +397,9 @@ function startCountdown() {
 }
 
 // ---- IPC ----
-api.onInit(({ collapsed, mode, extMore, locale, theme }) => {
+api.onInit(({ collapsed, mode, extMore, locale, theme, onboard }) => {
   document.body.classList.toggle('collapsed', !!collapsed);
+  onboardPending = !!onboard;
   applyTheme(theme);
   applyMode(mode);
   applyExtMore(extMore);
@@ -573,6 +577,8 @@ api.onUsage((u) => {
   nocredFlag = false;
   unavailableFlag = false;
   stopSpin();
+  // data is flowing, so the setup card (in whatever state) has served its purpose
+  if (document.body.classList.contains('has-onb')) dismissOnb();
   renderAll();
 });
 
@@ -584,7 +590,52 @@ api.onError(({ last, expired, needsSetup, noCredential, unavailable }) => {
   unavailableFlag = !!unavailable;
   if (last) latest = last;
   stopSpin();
+  // fresh install + statusLine never wired up: surface the setup card instead
+  // of hoping the user finds Settings → Data source on their own
+  if (setupFlag && onboardPending) { document.body.classList.add('has-onb'); reportHeight(); }
   renderAll();
+});
+
+// ---- First-run onboarding card ----
+function renderOnbMsg() {
+  const el = $('onb-status');
+  el.textContent = onbMsg ? t(onbMsg.key) : '';
+  el.className = 'onb-status' + (onbMsg && onbMsg.cls ? ' ' + onbMsg.cls : '');
+  reportHeight();
+}
+function setOnbMsg(key, cls) { onbMsg = key ? { key, cls } : null; renderOnbMsg(); }
+function dismissOnb() {
+  onboardPending = false;
+  document.body.classList.remove('has-onb');
+  api.onboarded();
+  reportHeight();
+}
+$('onb-later').addEventListener('click', dismissOnb);
+$('onb-go').addEventListener('click', async () => {
+  setOnbMsg('sl_working');
+  let info = {};
+  try { info = await api.statuslineInspect(); } catch (_) { setOnbMsg('sl_err_write', 'warn'); return; }
+  if (info.unreadable || (info.currentCmd && !info.isMine)) {
+    // the tricky cases — invalid settings.json, or replacing an existing
+    // statusLine (needs a confirm) — are Settings territory; hand over
+    setOnbMsg(info.unreadable ? 'sl_err_unreadable' : 'ob_insettings', 'warn');
+    onboardPending = false;
+    api.onboarded();
+    api.openSettings();
+    return;
+  }
+  let r = {};
+  try { r = await api.statuslineApply(); } catch (_) {}
+  if (r && r.ok) {
+    // configured — swap the button for the "open Claude Code" note; the card
+    // dismisses itself the moment the first payload lands (or via Later)
+    $('onb-go').classList.add('hidden');
+    setOnbMsg(info.nodeOk === false ? 'sl_done_no_node' : 'ob_done', info.nodeOk === false ? 'warn' : 'ok');
+    onboardPending = false;
+    api.onboarded();
+  } else {
+    setOnbMsg(r && r.error === 'unreadable' ? 'sl_err_unreadable' : 'sl_err_write', 'warn');
+  }
 });
 
 // ---- Controls ----

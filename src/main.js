@@ -252,7 +252,9 @@ function createWindow() {
 
   win.once('ready-to-show', () => {
     win.show();
-    win.webContents.send('ui:init', { collapsed, mode, extMore, locale: effectiveLocale(), theme: getSettings().theme });
+    // onboard: fresh install that never dismissed the first-run setup card —
+    // the renderer only shows it if the statusline source also reports needsSetup
+    win.webContents.send('ui:init', { collapsed, mode, extMore, locale: effectiveLocale(), theme: getSettings().theme, onboard: !loadState().onboarded });
     if (lastGood) win.webContents.send('usage:update', lastGood);
     if (lastError) win.webContents.send('usage:error', lastError);
     if (lastTokens) win.webContents.send('tokens:update', lastTokens);
@@ -763,6 +765,8 @@ ipcMain.on('ui:update-dismiss', () => {
   syncUpdateUi();
 });
 ipcMain.on('ui:settings', openSettings);
+// first-run setup card dismissed/completed — never show it again
+ipcMain.on('ui:onboarded', () => saveState({ onboarded: true }));
 ipcMain.on('ui:donate', () => shell.openExternal(DONATE_URL));
 ipcMain.on('ui:hide', () => { if (win) win.hide(); });
 ipcMain.on('ui:quit', () => { quitting = true; app.quit(); });
