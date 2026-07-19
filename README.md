@@ -173,3 +173,4 @@ trademarks of Anthropic, PBC, used here only to describe what the tool works wit
 ---
 
 Made by **[Kafka the Psychonaut](https://www.kafkathepsychonaut.io)**. MIT licensed.
+If it's useful to you, you can [buy me a coffee ☕](https://ko-fi.com/kafkathepsychonaut).
