@@ -377,8 +377,15 @@ async function poll() {
       // statusLine source: 100% local (capture file written by Claude Code's
       // statusLine hook). No network, so no breaker/backoff concerns.
       try {
-        const usage = readStatusline(app.getPath('userData'));
+        const usage = readStatusline(app.getPath('userData'), { knownSubscriber: loadState().sawStatuslineRateLimits === true });
         usage.pace = computePace(usage);
+        // Remember, across restarts, that this install is a claude.ai subscriber
+        // (rate_limits has appeared at least once). readStatusline uses it so a
+        // later window that momentarily lacks rate_limits — a new session before
+        // its first API response — isn't mistaken for an API-key account.
+        if ((usage.fiveHour || usage.sevenDay) && loadState().sawStatuslineRateLimits !== true) {
+          saveState({ sawStatuslineRateLimits: true });
+        }
         saveState({ paceSamples });
         lastGood = usage;
         lastError = null;

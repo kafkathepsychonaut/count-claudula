@@ -88,6 +88,21 @@ function captureCommand(userData) {
   return 'node "' + scriptFile(userData) + '"';
 }
 
+// Does a captured payload carry at least one usable rate-limit window? Claude
+// Code populates rate_limits ONLY for claude.ai subscribers (Pro/Max) and ONLY
+// after the first API response of a session — so a fresh capture written at
+// session start (or between calls) legitimately lacks it. Used to tell a
+// transient gap ("subscriber, no response yet") apart from a genuine API-key
+// account that will NEVER report windows.
+function hasRateLimits(data) {
+  const rl = (data && data.rate_limits) || {};
+  for (const key of ['five_hour', 'seven_day']) {
+    const w = rl[key];
+    if (w && typeof w.used_percentage === 'number') return true;
+  }
+  return false;
+}
+
 // resets_at arrives as a Unix epoch in SECONDS from the statusLine payload (the
 // endpoint uses an ISO string). Normalize both to epoch seconds for comparison.
 function toEpochSec(v) {
@@ -128,7 +143,14 @@ function aggregateWindow(entries, key) {
 //   .needsSetup -> no capture file at all (statusLine never wired up)
 //   .expired    -> files exist but are all stale/unreadable ("open Claude Code")
 //   .noCredential -> fresh capture(s) but no rate_limits (API-key / Console)
-function readStatusline(userData) {
+//
+// opts.knownSubscriber: the caller has seen rate_limits from this install before
+// (persisted across restarts). It hardens the transient-gap detection for the
+// case where every rate-limit-bearing capture has already rotated off disk, so a
+// subscriber is never mislabelled an API-key account just because their newest
+// session hasn't produced an API response yet.
+function readStatusline(userData, opts) {
+  const knownSubscriber = !!(opts && opts.knownSubscriber);
   let names;
   try { names = fs.readdirSync(userData); }
   catch (_) { names = []; }
@@ -143,6 +165,7 @@ function readStatusline(userData) {
   const now = Date.now();
   const fresh = [];          // parsed payloads within STALE_MS
   let parsedAny = false;     // at least one file was valid JSON
+  let everHadRateLimits = false; // any parsed file (fresh OR stale) carried a window
   const stalePaths = [];     // fresh-enough to keep, too old to prune... tracked for sweep
   for (const fp of files) {
     let j;
@@ -150,6 +173,7 @@ function readStatusline(userData) {
     catch (_) { continue; } // missing/torn/half-written — skip this one, others may be fine
     if (!j || typeof j.at !== 'number') continue;
     parsedAny = true;
+    if (hasRateLimits(j.data)) everHadRateLimits = true;
     if (now - j.at <= STALE_MS) fresh.push(j);
     else if (now - j.at > PRUNE_MS) stalePaths.push(fp);
   }
@@ -171,7 +195,20 @@ function readStatusline(userData) {
   const fiveHour = aggregateWindow(fresh, 'five_hour');
   const sevenDay = aggregateWindow(fresh, 'seven_day');
   if (!fiveHour && !sevenDay) {
-    // Fresh capture(s) but no rate_limits anywhere: Claude Code is demonstrably
+    if (everHadRateLimits || knownSubscriber) {
+      // A subscriber whose CURRENT fresh capture just has no window: rate_limits
+      // is populated only after the first API response of a session, so a newly
+      // opened window (or one idle between calls) reports none, and the rate-
+      // limit-bearing captures may have aged past STALE_MS. This is a transient
+      // gap, NOT an API-key account — surface it like an expired token so the
+      // widget keeps its last-known bars and nudges "run a Claude Code command"
+      // instead of flipping to the permanent no-subscription (cost-only) layout
+      // and hiding real bars.
+      const e = new Error('statusline fresh but no current rate_limits (subscriber awaiting an API response)');
+      e.expired = true;
+      throw e;
+    }
+    // Fresh capture(s) but no rate_limits ever seen: Claude Code is demonstrably
     // running but the account has no subscription windows — an API-key / Console
     // login. Signal it like the endpoint source does so the widget shows its
     // cost-first layout instead of nagging "open Claude Code".
