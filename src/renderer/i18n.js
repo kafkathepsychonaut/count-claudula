@@ -127,6 +127,16 @@
   };
   for (const k in FEEDBACK) if (DICT[k]) Object.assign(DICT[k], FEEDBACK[k]);
 
+  // The form hands the message to the OS mail client; with no mailto handler
+  // registered (common on Linux) that hand-off fails and nothing is sent. Saying
+  // "thanks" there while wiping the textarea destroys what the user wrote — so
+  // there's an honest failure line instead. en/pt; other locales fall back to en.
+  const FEEDBACK_FAIL = {
+    en: 'Couldn’t open your email app — nothing was sent. Your text is still here.',
+    pt: 'Não consegui abrir seu app de e-mail — nada foi enviado. Seu texto continua aqui.',
+  };
+  for (const k in FEEDBACK_FAIL) if (DICT[k]) DICT[k].feedback_failed = FEEDBACK_FAIL[k];
+
   const DONATE = {
     en: 'Support my projects', es: 'Apoya mis proyectos', pt: 'Apoiar meus projetos',
     fr: 'Soutenir mes projets', de: 'Meine Projekte unterstützen', it: 'Sostieni i miei progetti',
@@ -245,11 +255,24 @@
     sl_done:         { en: '✓ statusLine configured in Claude Code',                 pt: '✓ statusLine configurado no Claude Code' },
     sl_done_no_node: { en: '✓ written — but `node` isn’t on your PATH, so Claude Code can’t run it yet (install Node)', pt: '✓ gravado — mas `node` não está no seu PATH, então o Claude Code ainda não roda (instale o Node)' },
     sl_already:      { en: '✓ already configured',                                   pt: '✓ já está configurado' },
+    // "already configured" but node is missing is the exact broken setup the user
+    // is here to troubleshoot — the command is `node "script"`, so it never runs
+    // and the widget stays empty. Don't report it as success with no lead.
+    sl_already_no_node: { en: 'configured — but `node` isn’t on your PATH, so Claude Code can’t run it (install Node)', pt: 'configurado — mas `node` não está no seu PATH, então o Claude Code não consegue rodar (instale o Node)' },
     sl_replace_q:    { en: 'You already have a statusLine set in Claude Code. Replace it?', pt: 'Você já tem um statusLine no Claude Code. Substituir?' },
     sl_replace:      { en: 'Replace',                                                pt: 'Substituir' },
     sl_cancel:       { en: 'Cancel',                                                 pt: 'Cancelar' },
     sl_err_unreadable: { en: 'Your settings.json isn’t valid JSON — left untouched; edit it by hand', pt: 'Seu settings.json não é JSON válido — não foi alterado; edite à mão' },
     sl_err_write:    { en: 'Couldn’t write settings.json',                           pt: 'Não consegui gravar o settings.json' },
+    // Distinct from "couldn't write": the file exists but wouldn't open (another
+    // program holding it — antivirus, a backup pass, Claude Code writing it right
+    // then). Nothing was touched, and retrying in a moment usually just works —
+    // so don't send them off to edit JSON by hand like the unreadable case does.
+    sl_err_read:     { en: 'Couldn’t read your settings.json — another program may have it open; nothing was changed, try again', pt: 'Não consegui ler seu settings.json — outro programa pode estar com ele aberto; nada foi alterado, tente de novo' },
+    source_moved: {
+      en: 'Your data source was moved to the Claude Code statusLine. It had been set to the Anthropic endpoint by an earlier version without ever asking you — that source reads your Claude credential and is against Anthropic’s Consumer Terms. Pick it again above if you want it.',
+      pt: 'Sua fonte de dados foi movida para o statusLine do Claude Code. Ela tinha sido definida como Anthropic endpoint por uma versão anterior sem nunca te perguntar — essa fonte lê sua credencial do Claude e vai contra os Termos de Consumidor da Anthropic. Selecione de novo acima se quiser usá-la.',
+    },
     endpoint_understand: { en: 'I understand — use it',                             pt: 'Entendo — usar mesmo assim' },
     endpoint_tos_warn: {
       en: "The Anthropic endpoint source reads your local Claude credential to call an internal usage endpoint. This is against Anthropic’s Consumer Terms and has led to account bans — use it at your own risk.",
@@ -349,6 +372,11 @@
     update_uptodate: 'You’re on the latest version',
     update_found: 'Update available',
     update_check_error: 'Couldn’t check — try again',
+    // runManualCheck() short-circuits when a download is already running or a
+    // tray-initiated check holds the latch. Both used to fall through to
+    // "you're on the latest version" — a flat lie while a newer build downloads.
+    update_downloading: 'Downloading update…',
+    update_check_busy: 'A check is already running…',
   });
   if (DICT.pt) Object.assign(DICT.pt, {
     set_updates: 'Atualizações',
@@ -357,6 +385,8 @@
     update_uptodate: 'Você está na versão mais recente',
     update_found: 'Atualização disponível',
     update_check_error: 'Não foi possível verificar — tente de novo',
+    update_downloading: 'Baixando atualização…',
+    update_check_busy: 'Já tem uma verificação em andamento…',
   });
 
   // Circuit breaker tripped: the usage endpoint keeps refusing, so polling
@@ -640,6 +670,16 @@
     fa: 'این فرمان را به عنوان statusLine در Claude Code استفاده کنید (settings.json). داده‌ها فقط هنگام اجرای Claude Code تازه می‌شوند.',
   };
   for (const k in SOURCE_HINT) if (DICT[k]) DICT[k].source_hint = SOURCE_HINT[k];
+
+  // The two entries of the data source dropdown. This is the one control that
+  // decides between the Terms-safe default and the endpoint people get banned
+  // for, so "(default)" has to reach a non-English reader — it was hardcoded
+  // English. en/pt; other locales fall back to English via t().
+  const SOURCE_OPT = {
+    source_opt_statusline: { en: 'Claude Code statusLine (default)', pt: 'statusLine do Claude Code (padrão)' },
+    source_opt_endpoint:   { en: 'Anthropic endpoint',               pt: 'Endpoint da Anthropic' },
+  };
+  for (const key in SOURCE_OPT) for (const k in SOURCE_OPT[key]) if (DICT[k]) DICT[k][key] = SOURCE_OPT[key][k];
 
 
   // ---- v1.3.0 keys (grouped pane, pace hint, honest notes) ----

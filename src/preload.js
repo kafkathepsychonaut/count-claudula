@@ -28,11 +28,15 @@ contextBridge.exposeInMainWorld('claudeCount', {
   onboarded: () => ipcRenderer.send('ui:onboarded'),
   // settings
   settingsGet: () => ipcRenderer.invoke('settings:get'),
-  settingsSet: (k, v) => ipcRenderer.send('settings:set', { k, v }),
+  // `consent` carries "the user actually answered the ToS prompt" through to
+  // main, which refuses the move onto the endpoint source without it.
+  settingsSet: (k, v, consent) => ipcRenderer.send('settings:set', { k, v, consent }),
   settingsClose: () => ipcRenderer.send('settings:close'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   statuslineInspect: () => ipcRenderer.invoke('statusline:inspect'),
-  statuslineApply: () => ipcRenderer.invoke('statusline:apply'),
+  // opts.confirmReplace says the "replace your existing statusLine?" dialog was
+  // answered; main refuses to overwrite a foreign command without it.
+  statuslineApply: (opts) => ipcRenderer.invoke('statusline:apply', opts),
   sendFeedback: (text) => ipcRenderer.invoke('feedback:send', text),
   donate: () => ipcRenderer.send('ui:donate'),
 });

@@ -1,6 +1,16 @@
 'use strict';
 const api = window.claudeCount;
 
+// This widget is frameless, always-on-top and on every workspace, so it sits
+// under any drag the user makes across their desktop. Chromium's default on a
+// dropped file or link is to NAVIGATE the window to it — and the preload
+// bridge survives navigation, so a stray dropped page would inherit the whole
+// window.claudeCount API. Swallow both events (dragover too, or the drop is
+// never ours to cancel). Window moving uses -webkit-app-region: drag, which
+// the compositor handles without DOM drag events, so nothing here touches it.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+
 let latest = null;            // last usage received
 let stale = false;            // last fetch failed -> showing stale data
 let expiredFlag = false;      // failed because the token expired (read-only mode)
@@ -615,10 +625,11 @@ $('onb-go').addEventListener('click', async () => {
   setOnbMsg('sl_working');
   let info = {};
   try { info = await api.statuslineInspect(); } catch (_) { setOnbMsg('sl_err_write', 'warn'); return; }
-  if (info.unreadable || (info.currentCmd && !info.isMine)) {
-    // the tricky cases — invalid settings.json, or replacing an existing
-    // statusLine (needs a confirm) — are Settings territory; hand over
-    setOnbMsg(info.unreadable ? 'sl_err_unreadable' : 'ob_insettings', 'warn');
+  if (info.unreadable || info.readError || (info.currentCmd && !info.isMine)) {
+    // the tricky cases — invalid settings.json, a file we couldn't open, or
+    // replacing an existing statusLine (needs a confirm) — are Settings
+    // territory; hand over rather than guess from a one-button card
+    setOnbMsg(info.unreadable ? 'sl_err_unreadable' : info.readError ? 'sl_err_read' : 'ob_insettings', 'warn');
     onboardPending = false;
     api.onboarded();
     api.openSettings();
@@ -633,8 +644,16 @@ $('onb-go').addEventListener('click', async () => {
     setOnbMsg(info.nodeOk === false ? 'sl_done_no_node' : 'ob_done', info.nodeOk === false ? 'warn' : 'ok');
     onboardPending = false;
     api.onboarded();
+  } else if (r && r.error === 'needs_confirm') {
+    // a foreign statusLine appeared between our inspect and the apply — main
+    // refused to clobber it. That confirmation only exists in Settings.
+    setOnbMsg('ob_insettings', 'warn');
+    onboardPending = false;
+    api.onboarded();
+    api.openSettings();
   } else {
-    setOnbMsg(r && r.error === 'unreadable' ? 'sl_err_unreadable' : 'sl_err_write', 'warn');
+    setOnbMsg(r && r.error === 'unreadable' ? 'sl_err_unreadable'
+      : r && r.error === 'read_failed' ? 'sl_err_read' : 'sl_err_write', 'warn');
   }
 });
 
@@ -690,9 +709,15 @@ $('ext-more-toggle').addEventListener('click', () => {
 });
 
 // Keyboard: every role="button" must actually work as a button.
+// stopPropagation is load-bearing, not tidiness: #upd-x is nested inside #upd
+// and both are keyable. Without it, Enter on the dismiss X fires upd-x's
+// handler (snooze) and then keeps bubbling to #upd's (download) — the
+// e.stopPropagation() in upd-x's click listener only stops the synthetic
+// click, never the original keydown. Main honours both IPCs in order, so the
+// keyboard user who asked to snooze got an unwanted download instead.
 function keyable(el, fn) {
   el.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); }
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); fn(e); }
   });
 }
 keyable($('ext-more-toggle'), () => $('ext-more-toggle').click());

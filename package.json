@@ -1,6 +1,6 @@
 {
   "name": "count-claudula",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "productName": "Count Claudula",
   "description": "Floating always-on-top widget that shows how much of your Claude 5-hour and weekly limits you've used — plus today's Claude Code token cost.",
   "main": "src/main.js",
@@ -46,7 +46,7 @@
       "icon": "build/icon.png"
     },
     "portable": {
-      "artifactName": "Count Claudula.exe"
+      "artifactName": "Count-Claudula-${version}.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -64,7 +64,11 @@
       ],
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.png",
-      "identity": null
+      "identity": null,
+      "artifactName": "Count-Claudula-${version}-${arch}-${os}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "Count-Claudula-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": [

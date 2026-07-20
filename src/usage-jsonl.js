@@ -4,18 +4,27 @@
 // locally. "API-equivalent" cost using current per-model prices + cache tiers.
 
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
 const readline = require('readline');
 
-// US$ per 1M tokens (ref. claude-api 2026-07). read=0.1x in; cache write 5m=1.25x, 1h=2x.
+// US$ per 1M tokens (ref. claude-api 2026-07-19). read=0.1x in; cache write 5m=1.25x, 1h=2x.
 const PRICE = {
   fable:  { in: 10, out: 50, read: 1,    w5: 12.5, w1: 20 },
   opus:   { in: 5,  out: 25, read: 0.5,  w5: 6.25, w1: 10 },
   sonnet: { in: 3,  out: 15, read: 0.3,  w5: 3.75, w1: 6 },
   haiku:  { in: 1,  out: 5,  read: 0.1,  w5: 1.25, w1: 2 },
   other:  { in: 3,  out: 15, read: 0.3,  w5: 3.75, w1: 6 }, // unknown IDs: mid-tier estimate, shown as its own row
+  sonnet5: { in: 2, out: 10, read: 0.2,  w5: 2.5,  w1: 4 }, // launch promo, see SONNET5_INTRO_END
 };
+
+// Sonnet 5 shipped on introductory pricing that runs THROUGH 2026-08-31 and
+// then reverts to the standard sonnet row ($3/$15) — so the first standard-
+// priced instant is 2026-09-01Z. Every line is priced by its OWN timestamp
+// rather than by "now", which makes the rollover self-executing: lines logged
+// inside the window keep intro rates forever (a cached cost stays correct even
+// when re-read in September) and later lines bill $3/$15 with no release, no
+// edit, and no silent 1.5x overcharge the morning the promo ends.
+const SONNET5_INTRO_END = Date.UTC(2026, 8, 1);
 
 function tierOf(model) {
   const m = String(model || '').toLowerCase();
@@ -24,6 +33,17 @@ function tierOf(model) {
   if (m.includes('sonnet')) return 'sonnet';
   if (m.includes('haiku')) return 'haiku';
   return 'other';
+}
+
+// Per-model-version pricing, the same way costMultiplier() discriminates on
+// version below. Deliberately NOT a new tierOf() tier: the renderer walks a
+// fixed list of tier names, so a 'sonnet5' bucket would drop its cost silently
+// out of the by-model breakdown. Sonnet 5 bills at its own rates but still
+// displays under 'sonnet'. 'sonnet-4-5' can't match — it has no 'sonnet-5'.
+function priceOf(model, ts) {
+  const id = String(model || '').toLowerCase();
+  if (ts < SONNET5_INTRO_END && /sonnet-5(?!\d)/.test(id)) return PRICE.sonnet5;
+  return PRICE[tierOf(model)];
 }
 
 // Billing modifiers the JSONL already records per line (ref. claude-api /
@@ -48,10 +68,11 @@ function costMultiplier(usage, model) {
   return mult;
 }
 
-function projectsDir() {
-  const base = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-  return path.join(base, 'projects');
-}
+// Shared resolver: reading process.env directly here missed a CLAUDE_CONFIG_DIR
+// exported from a shell profile, because a GUI-launched app never inherits one —
+// so the token pane silently scanned an empty ~/.claude and reported "no
+// activity" while Claude Code wrote transcripts elsewhere.
+const { projectsDir } = require('./claude-paths');
 
 // Per-file cache keyed by size+mtime, so unchanged files aren't re-read every poll
 // (a heavy user only actively appends to one file). Cleared when the day rolls.
@@ -66,19 +87,41 @@ let cacheSaveTimer = null;
 function setCacheDir(dir) { cacheDir = dir; }
 function cacheFilePath() { return cacheDir ? path.join(cacheDir, 'jsonl-cache.json') : null; }
 
-const CACHE_V = 1; // bump when the entry shape changes — old files are then ignored wholesale
+const CACHE_V = 2; // bump when the entry shape changes — old files are then ignored wholesale
+
+// One record per billed response, as positional arrays — this cache is
+// rewritten every few seconds while a session streams, and a week of heavy use
+// is thousands of records, so field names would dominate the file size.
+//   today: [key, output, cost, savings, tier, input, cacheRead, cacheWrite, project]
+//   week:  [key, output, cost, dayIdx]
+// Week rows carry only what the sparkline needs; today's rows carry the full
+// breakdown. Both keep `output` because that is what picks the winner between
+// duplicates (see todayUsage).
+const TODAY_REC_LEN = 9;
+const WEEK_REC_LEN = 4;
+
+// v1 cached one pre-summed total per file, which cannot be deduplicated after
+// the fact; v2 caches the per-response records instead. The version gate above
+// discards a v1 file wholesale rather than reading its {agg, weekCost} shape as
+// an empty v2 entry, which would silently report $0.00 after an upgrade.
+function validRec(r, len) {
+  if (!Array.isArray(r) || r.length !== len || typeof r[0] !== 'string') return false;
+  for (let i = 1; i < len; i++) {
+    if (len === TODAY_REC_LEN && (i === 4 || i === 8)) {
+      if (r[i] !== null && typeof r[i] !== 'string') return false; // tier, project path
+    } else if (!Number.isFinite(r[i])) return false;
+  }
+  return true;
+}
 
 // A poisoned entry would silently skip re-aggregation while breaking the
 // summation on every poll, so entries are validated field by field on load;
 // anything suspect just re-parses (slower, never wrong).
 function validCacheEntry(v) {
   return v && Number.isFinite(v.size) && Number.isFinite(v.mtimeMs)
-    && typeof v.weekCost === 'number'
-    && Array.isArray(v.weekDays) && v.weekDays.length === 7 && v.weekDays.every((n) => typeof n === 'number')
-    && v.agg && typeof v.agg === 'object'
-    && ['input', 'output', 'cacheRead', 'cacheWrite', 'cost', 'savings'].every((k) => typeof v.agg[k] === 'number')
-    && v.agg.byModel && typeof v.agg.byModel === 'object'
-    && v.agg.byProject && typeof v.agg.byProject === 'object';
+    && Array.isArray(v.today) && v.today.every((r) => validRec(r, TODAY_REC_LEN))
+    && Array.isArray(v.week) && v.week.every((r) => validRec(r, WEEK_REC_LEN)
+      && r[3] >= 0 && r[3] < 7); // day bucket indexes weekDays[] directly
 }
 
 function loadCacheFromDisk(startMs) {
@@ -121,8 +164,23 @@ function flushCache() {
   try { fs.writeFileSync(fp, cacheSnapshot()); } catch (_) {}
 }
 
-function emptyAgg() {
-  return { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, savings: 0, byModel: {}, byProject: {} };
+// Identity of the billed API response a line belongs to. Claude Code writes one
+// JSONL line PER CONTENT BLOCK and one per streaming checkpoint, so a single
+// response (text + tool_use) lands as several lines that each repeat the whole
+// message.usage — and `claude --resume` / rewind / --fork-session copy the
+// prior history verbatim into a new .jsonl, so those same lines reappear under
+// a second path. Both files pass the mtime filter, so without this the day's
+// cost roughly doubles. message.id is the API's own per-response id (never
+// observed missing, and never seen split across two requestIds); requestId
+// joins it as a tiebreak when present. A line with no message.id can't be
+// matched to anything, so it falls back to a path+line key: it stays distinct
+// rather than collapsing unrelated turns into one.
+function identityOf(j, msg, fp, lineNo) {
+  const id = msg && msg.id;
+  if (typeof id === 'string' && id) {
+    return id + '|' + (typeof j.requestId === 'string' ? j.requestId : '');
+  }
+  return fp + '#' + lineNo;
 }
 
 // Transcripts are not confined to projects/<dir>/*.jsonl: subagent and workflow
@@ -162,17 +220,24 @@ function projectKeyOf(cwd) {
   return cwd;
 }
 
-// Stream one file line by line (don't load it whole). One pass fills two
-// buckets: today's full aggregate and the 7 complete days before today
-// (total + per-day, for the average and the daily sparkline).
+// Stream one file line by line (don't load it whole), emitting one record per
+// line rather than a running total. A pre-summed per-file total cannot be
+// deduplicated after the fact — the duplicates this has to cancel live in
+// OTHER files (forked sessions) and in cached files that are never re-read —
+// so the summing moves to todayUsage, which sees every file at once.
 async function aggregateFile(fp, todayMs, weekMs, dayIdx) {
-  const agg = emptyAgg();
-  let weekCost = 0;
-  const weekDays = [0, 0, 0, 0, 0, 0, 0];
+  // Resolve this file's own duplicates as we read, so the cache stores one
+  // record per billed response rather than one per line (~60% fewer). The
+  // winner rule is the same max-output_tokens used across files below, and max
+  // is associative, so folding locally first and globally after is identical to
+  // one global pass — it just moves the work off the poll path.
+  const recs = new Map();
   let rl;
   try { rl = readline.createInterface({ input: fs.createReadStream(fp, 'utf8'), crlfDelay: Infinity }); }
-  catch (_) { return { agg, weekCost, weekDays }; }
+  catch (_) { return { today: [], week: [] }; }
+  let lineNo = 0;
   for await (const ln of rl) {
+    lineNo++;
     if (ln.length < 40 || ln.indexOf('"usage"') < 0 || ln.indexOf('"assistant"') < 0) continue;
     let j;
     try { j = JSON.parse(ln); } catch (_) { continue; }
@@ -183,9 +248,13 @@ async function aggregateFile(fp, todayMs, weekMs, dayIdx) {
     if (ts < weekMs) continue;
 
     const u = msg.usage;
-    const p = PRICE[tierOf(msg.model)];
-    const inp = u.input_tokens || 0;
     const out = u.output_tokens || 0;
+    const key = identityOf(j, msg, fp, lineNo);
+    const prev = recs.get(key);
+    if (prev && prev.out >= out) continue; // an earlier, fuller snapshot already won
+
+    const p = priceOf(msg.model, ts);
+    const inp = u.input_tokens || 0;
     const cr = u.cache_read_input_tokens || 0;
     const cwTot = u.cache_creation_input_tokens || 0;
     const cc = u.cache_creation || {};
@@ -199,26 +268,23 @@ async function aggregateFile(fp, todayMs, weekMs, dayIdx) {
       // (clock-edge stragglers) is skipped so the total always matches the buckets
       const idx = dayIdx[localDayKey(when)];
       if (idx == null) continue;
-      weekDays[idx] += lineCost;
-      weekCost += lineCost;
+      recs.set(key, { out, isToday: false, r: [key, out, lineCost, idx] });
       continue;
     }
 
-    const t = tierOf(msg.model);
-    const m = agg.byModel[t] || (agg.byModel[t] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
-    m.input += inp; m.output += out; m.cacheRead += cr; m.cacheWrite += cwTot; m.cost += lineCost;
-    agg.input += inp; agg.output += out; agg.cacheRead += cr; agg.cacheWrite += cwTot; agg.cost += lineCost;
     // net cache economics vs a no-cache baseline (all those tokens as plain
     // input): reads save (in − read) each, writes cost a premium over input.
     // Billing modifiers scale every token price, so the delta scales too.
-    agg.savings += mult * (cr * (p.in - p.read) - w1 * (p.w1 - p.in) - w5 * (p.w5 - p.in)) / 1e6;
-    const proj = projectKeyOf(j.cwd);
-    if (proj) {
-      const pr = agg.byProject[proj] || (agg.byProject[proj] = { cost: 0 });
-      pr.cost += lineCost;
-    }
+    const savings = mult * (cr * (p.in - p.read) - w1 * (p.w1 - p.in) - w5 * (p.w5 - p.in)) / 1e6;
+    recs.set(key, {
+      out, isToday: true,
+      r: [key, out, lineCost, savings, tierOf(msg.model), inp, cr, cwTot, projectKeyOf(j.cwd)],
+    });
   }
-  return { agg, weekCost, weekDays };
+  const today = [];
+  const week = [];
+  for (const v of recs.values()) (v.isToday ? today : week).push(v.r);
+  return { today, week };
 }
 
 async function todayUsage() {
@@ -252,6 +318,39 @@ async function todayUsage() {
   }
 
   const seen = new Set();
+  let dirty = false;
+  for (const { fp, size, mtimeMs } of files) {
+    seen.add(fp);
+    const entry = fileCache.get(fp);
+    if (!entry || entry.size !== size || entry.mtimeMs !== mtimeMs) {
+      const r = await aggregateFile(fp, startMs, weekMs, dayIdx); // re-read only changed files
+      fileCache.set(fp, { size, mtimeMs, today: r.today, week: r.week });
+      dirty = true;
+    }
+  }
+
+  for (const k of fileCache.keys()) if (!seen.has(k)) { fileCache.delete(k); dirty = true; } // prune gone files
+  if (dirty) scheduleCacheSave();
+
+  // Resolve duplicates across every file before summing anything. Highest
+  // output_tokens wins: Claude Code appends a line per streaming checkpoint, so
+  // the early copies of a response carry a PARTIAL output count (5 tokens) and
+  // only the last carries the real one (2327) — first-wins would gut the output
+  // figure. Max is order-independent, so a file served from cache and the same
+  // file re-parsed settle on the same record, and a forked copy of a session
+  // agrees with its original no matter which is walked first.
+  // One map for both buckets, so a response whose checkpoints straddle local
+  // midnight lands wholly in the winner's bucket instead of being counted twice.
+  const chosen = new Map();
+  const claim = (r, isToday) => {
+    const prev = chosen.get(r[0]);
+    if (!prev || r[1] > prev.r[1]) chosen.set(r[0], { r, isToday });
+  };
+  for (const entry of fileCache.values()) {
+    for (const r of entry.today) claim(r, true);
+    for (const r of entry.week) claim(r, false);
+  }
+
   const totals = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
   const byModel = {};
   const byProject = {};
@@ -260,34 +359,23 @@ async function todayUsage() {
   let weekCost = 0;
   const weekDays = [0, 0, 0, 0, 0, 0, 0];
 
-  let dirty = false;
-  for (const { fp, size, mtimeMs } of files) {
-    seen.add(fp);
-    let entry = fileCache.get(fp);
-    if (!entry || entry.size !== size || entry.mtimeMs !== mtimeMs) {
-      const r = await aggregateFile(fp, startMs, weekMs, dayIdx); // re-read only changed files
-      entry = { size, mtimeMs, agg: r.agg, weekCost: r.weekCost, weekDays: r.weekDays };
-      fileCache.set(fp, entry);
-      dirty = true;
+  for (const { r, isToday } of chosen.values()) {
+    if (!isToday) {
+      weekCost += r[2];
+      weekDays[r[3]] += r[2];
+      continue;
     }
-    const a = entry.agg;
-    weekCost += entry.weekCost;
-    for (let i = 0; i < 7; i++) weekDays[i] += entry.weekDays[i];
-    totals.input += a.input; totals.output += a.output; totals.cacheRead += a.cacheRead; totals.cacheWrite += a.cacheWrite;
-    cost += a.cost;
-    savings += a.savings || 0;
-    for (const [t, v] of Object.entries(a.byModel)) {
-      const m = byModel[t] || (byModel[t] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
-      m.input += v.input; m.output += v.output; m.cacheRead += v.cacheRead; m.cacheWrite += v.cacheWrite; m.cost += v.cost;
-    }
-    for (const [name, v] of Object.entries(a.byProject || {})) {
-      const pr = byProject[name] || (byProject[name] = { cost: 0 });
-      pr.cost += v.cost;
+    const [, out, lineCost, sav, tier, inp, cr, cw, proj] = r;
+    const m = byModel[tier] || (byModel[tier] = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 });
+    m.input += inp; m.output += out; m.cacheRead += cr; m.cacheWrite += cw; m.cost += lineCost;
+    totals.input += inp; totals.output += out; totals.cacheRead += cr; totals.cacheWrite += cw;
+    cost += lineCost;
+    savings += sav;
+    if (proj) {
+      const pr = byProject[proj] || (byProject[proj] = { cost: 0 });
+      pr.cost += lineCost;
     }
   }
-
-  for (const k of fileCache.keys()) if (!seen.has(k)) { fileCache.delete(k); dirty = true; } // prune gone files
-  if (dirty) scheduleCacheSave();
 
   // average over days that actually had activity — dividing by a flat 7
   // understates the figure for anyone with fewer days of history

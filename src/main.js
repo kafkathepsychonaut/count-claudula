@@ -72,6 +72,11 @@ let paceSamples = [];        // recent (t, 5h-utilization) samples -> burn-rate 
 // limit before it resets?" — instead of only showing the current level.
 const PACE_WINDOW_MS = 90 * 60 * 1000;
 const PACE_MIN_SPAN_MS = 4 * 60 * 1000; // a couple of polls of runway before a slope means anything
+// How old the newest sample may be and still support a "hot" verdict. The
+// statusline source keeps returning data for 2h after the last Claude Code
+// session goes quiet; a burn rate measured that long ago is history, not a
+// prediction, so it must not keep the warning lit while the user is idle.
+const PACE_HOT_MAX_AGE_MS = 10 * 60 * 1000;
 
 // The endpoint reports `resets_at` with a jittering sub-second fraction — the
 // string differs on EVERY poll even though the real reset time is fixed. Compare
@@ -85,26 +90,51 @@ function computePace(usage) {
   const w = usage && usage.fiveHour;
   if (!w || typeof w.utilization !== 'number') { paceSamples = []; return null; }
   const now = usage.fetchedAt || Date.now();
+  const wall = Date.now();
   const rk = windowKey(w.resetsAt);
   const last = paceSamples[paceSamples.length - 1];
-  // Only a genuine window roll invalidates the slope: utilization fell hard (a
-  // reset to ~0) or the reset time jumped by minutes. A ±1 dip is just integer
-  // rounding noise — tolerate it so the sample buffer isn't wiped every poll.
-  if (last && (w.utilization < last.u - 1 || (last.r && rk && last.r !== rk))) paceSamples = [];
-  if (!last || last.t !== now) paceSamples.push({ t: now, u: w.utilization, r: rk });
+  // Only a genuine window ROLL invalidates the slope, and the reset boundary is
+  // what proves one: a roll moves it by ~5h. A falling utilization does NOT —
+  // the statusline aggregate is the MAX across sessions fresher than 2h, so when
+  // the session holding the high value crosses that cutoff the number drops back
+  // to a surviving session's frozen, lower reading with no reset in sight.
+  // Wiping there erased a genuine hot warning AND re-seeded the buffer at the
+  // understated value; the next API response then snapped it back up and that
+  // artificial jump was read as real burn (a wild perHour and a false "you'll
+  // hit the limit before reset"). Only fall back to the utilization test when
+  // there's no reset boundary to compare (endpoint payloads without resets_at).
+  const rolled = !!last && ((last.r && rk) ? last.r !== rk : w.utilization < last.u - 1);
+  if (rolled) paceSamples = [];
+  // Inside one window usage only ever climbs (it resets, it doesn't fall), so a
+  // dip is an aggregation artifact — or ±1 integer rounding noise on the
+  // endpoint. Carry the last known level instead of recording the dip, and read
+  // the current level off the buffer so a fabricated jump can't follow.
+  const prev = rolled ? null : last;
+  const level = (prev && w.utilization < prev.u) ? prev.u : w.utilization;
+  if (!last || last.t !== now) paceSamples.push({ t: now, u: level, r: rk });
   paceSamples = paceSamples.filter((s) => now - s.t <= PACE_WINDOW_MS);
   const first = paceSamples[0];
+  const cur = paceSamples[paceSamples.length - 1];
   const spanMs = now - first.t;
   if (paceSamples.length < 2 || spanMs < PACE_MIN_SPAN_MS) return null;
   // Clamp to 0: a flat or drifting-down window reads as "≈ +0%/h" (steady) rather
   // than vanishing — the hint stays visible almost all the time once it's warm.
-  const perHour = Math.max(0, (w.utilization - first.u) / (spanMs / 3600000));
-  const hoursToReset = w.resetsAt ? (new Date(w.resetsAt).getTime() - now) / 3600000 : 0;
-  const hoursTo100 = perHour > 0 ? (100 - w.utilization) / perHour : Infinity;
+  const perHour = Math.max(0, (cur.u - first.u) / (spanMs / 3600000));
+  // Time-to-reset is measured against the WALL CLOCK, never `now`. With the
+  // statusline source `now` is the newest capture's timestamp, and that stops
+  // advancing the moment every Claude Code session goes idle — while
+  // readStatusline keeps succeeding for up to 2h. Measuring from that frozen
+  // instant kept comparing the pace against runway that had already elapsed, so
+  // the widget sat on a red "hot" warning while the user did nothing, and went
+  // on asserting it after the reset had already passed.
+  const hoursToReset = w.resetsAt ? (new Date(w.resetsAt).getTime() - wall) / 3600000 : 0;
+  const hoursTo100 = perHour > 0 ? (100 - cur.u) / perHour : Infinity;
   return {
     perHour: Math.round(perHour),
-    // "hot" = at this pace the limit arrives before the reset does
-    hot: perHour > 0 && hoursToReset > 0 && hoursTo100 < hoursToReset,
+    // "hot" = at this pace the limit arrives before the reset does. A burn rate
+    // last observed ages ago says nothing about right now, so stale captures
+    // can't keep the warning lit indefinitely.
+    hot: perHour > 0 && hoursToReset > 0 && hoursTo100 < hoursToReset && (wall - now) <= PACE_HOT_MAX_AGE_MS,
   };
 }
 
@@ -131,29 +161,101 @@ function migrateLegacyState() {
   } catch (_) { /* fresh defaults are an acceptable fallback */ }
 }
 
-// The default data source flipped to 'statusline' (ToS-clean). An existing
-// install that never chose a source was silently using the endpoint;
-// don't yank it out from under them into a source that needs manual setup —
-// pin 'endpoint' once for anyone who already has state. Brand-new installs (no
-// state file yet) fall through to the new statusline default. Runs after
-// migrateLegacyState() so a legacy-migrated user counts as existing.
-function migrateSourceDefault() {
+// The default data source flipped to 'statusline' (ToS-clean) in v1.4.0. An
+// install from BEFORE the flip was silently using the endpoint; don't yank it
+// out from under them into a source that needs manual setup — pin 'endpoint'
+// once for those. Everyone else gets the new default.
+//
+// THE TRAP, for whoever touches this next: "state.json exists" is NOT "installed
+// before the flip", and reading it that way (the original guard) silently moved
+// essentially every fresh v1.4 install onto the ToS-violating endpoint on its
+// SECOND launch, bypassing the app's own consent dialog. A fresh install never
+// persists settings.source — getSettings() only COMPUTES the 'statusline'
+// default, and statusline:apply skips writing it for exactly that reason — yet
+// state.json appears within seconds of first run for unrelated reasons
+// (ui:onboarded from every path through the first-run card, x/y on a window
+// drag, paceSamples + sawStatuslineRateLimits on every successful poll).
+//
+// There is NO heuristic that separates the two populations, and trying was the
+// second mistake. A pre-flip upgrader and a bug-flipped v1.4 install both end up
+// with exactly `settings.source: 'endpoint'` written by this same function — the
+// files are byte-identical. (The previous attempt keyed off persisted
+// paceSamples, which only exists from v1.3.4 on, so 13 of the 14 pre-flip tags
+// would have been pushed the other way.)
+//
+// So stop guessing and ask a question that HAS an answer: did the user ever pass
+// the ToS gate for this source? That gate is the only place endpoint use is
+// consented to, and from now on answering it persists `endpointConsent`. An
+// 'endpoint' pin without that marker was never consented to by anybody — it was
+// written by a migration, in both populations — so it gets moved to the clean
+// source once, and `endpointResetAt` tells Settings to explain why.
+//
+// That deliberately also moves genuine pre-flip endpoint users. It's the right
+// call, not just the safe one: they never consented either (the endpoint was
+// simply the only source back then, before its Terms status was understood).
+// Recovery is one click through the gate, and now they find out it happened —
+// which is precisely what the original bug denied everyone.
+//
+// The decision is written down before anything else can create state.json, so it
+// runs exactly once per install. Runs after migrateLegacyState() so a
+// legacy-migrated user counts as existing.
+function resolveSourceOnce() {
   try {
-    if (!fs.existsSync(STATE_FILE)) return;        // fresh install: new default applies
     const s = loadState();
-    const src = s.settings && s.settings.source;
-    if (src === 'endpoint' || src === 'statusline') return; // already an explicit choice
-    saveState({ settings: { ...(s.settings || {}), source: 'endpoint' } });
+    const cur = s.settings || {};
+    const src = cur.source;
+    if (src === 'statusline') return;                                // already on the safe source
+    if (src === 'endpoint' && cur.endpointConsent === true) return;   // they answered the gate: their call, never touch it
+    const patch = { ...cur, source: 'statusline' };
+    // Only an un-consented endpoint pin needs explaining; a fresh install that
+    // never had a source resolves silently to the default it would have had.
+    if (src === 'endpoint') patch.endpointResetAt = Date.now();
+    saveState({ settings: patch });
   } catch (_) { /* worst case the widget shows the statusline setup nudge, not a crash */ }
 }
 
+// A read that FAILED is not an empty state. saveState() merges its patch over
+// whatever loadState() returned, so one transient EBUSY/EPERM (Windows AV or a
+// backup holding state.json open for a moment) used to make the very next write
+// persist ONLY the patch — permanently discarding position, theme, language,
+// startWithOS, onboarded, snoozedVersion and settings.source. And every
+// successful poll writes paceSamples, so the exposure was continuous.
+// So: ENOENT means "no state yet, start fresh" and is safe to write over;
+// anything else means "we don't know what's in there" and blocks the merge
+// until a read succeeds again (the next poll retries seconds later).
+let stateUnreadable = false;
 function loadState() {
-  try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch (_) { return {}; }
+  try {
+    const s = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    stateUnreadable = false;
+    return (s && typeof s === 'object' && !Array.isArray(s)) ? s : {};
+  } catch (e) {
+    if (e && e.code === 'ENOENT') { stateUnreadable = false; return {}; }
+    if (e instanceof SyntaxError) {
+      // Content we can't parse is NOT transient — refusing forever would mean
+      // never persisting anything again. Keep a copy (so nothing is destroyed
+      // silently) and start fresh. With the atomic write below this should now
+      // only ever be a file damaged from outside the app.
+      try { fs.renameSync(STATE_FILE, STATE_FILE + '.bad'); } catch (_) {}
+      stateUnreadable = false;
+      return {};
+    }
+    stateUnreadable = true;
+    return {};
+  }
 }
 function saveState(patch) {
-  let s = loadState();
-  s = { ...s, ...patch };
-  try { fs.writeFileSync(STATE_FILE, JSON.stringify(s)); } catch (_) {}
+  const s = loadState();
+  if (stateUnreadable) return; // don't merge over state we failed to read: that's how keys vanish
+  const next = { ...s, ...patch };
+  const tmp = STATE_FILE + '.' + process.pid + '.tmp';
+  try {
+    // Temp + rename (same trick as the statusLine capture script): a crash or a
+    // power cut mid-write can't leave truncated JSON behind, which would parse
+    // as {} and take every setting with it.
+    fs.writeFileSync(tmp, JSON.stringify(next));
+    fs.renameSync(tmp, STATE_FILE);
+  } catch (_) { try { fs.unlinkSync(tmp); } catch (_) {} }
 }
 
 function defaultPosition() {
@@ -165,12 +267,18 @@ function defaultPosition() {
 }
 
 // Keep a saved position on a visible monitor — a display/DPI change can leave
-// x/y outside every screen, hiding the window.
-function clampPosition(x, y) {
+// x/y outside every screen, hiding the window. `h` is the height the window is
+// ABOUT to have: the pane grows downward, so the clamp has to be done against
+// the new height, not the current one.
+function clampPosition(x, y, h) {
+  const height = h || targetHeight();
   const a = screen.getDisplayNearestPoint({ x, y }).workArea;
+  // Math.max on the ceiling keeps the TOP edge on screen when the window is
+  // taller than the work area (a long extended pane on a short display): the
+  // header and the bars stay reachable, the overflow falls off the bottom.
   return {
-    x: Math.min(Math.max(x, a.x), a.x + a.width - WIN_W),
-    y: Math.min(Math.max(y, a.y), a.y + a.height - targetHeight()),
+    x: Math.min(Math.max(x, a.x), Math.max(a.x, a.x + a.width - WIN_W)),
+    y: Math.min(Math.max(y, a.y), Math.max(a.y, a.y + a.height - height)),
   };
 }
 
@@ -183,14 +291,24 @@ function getSettings() {
     theme: (s.theme === 'bloodthirsty' || s.theme === 'zombie') ? s.theme : 'classic',
     // 'statusline' (Claude Code only, no endpoint — the ToS-clean default) |
     // 'endpoint' (live, all surfaces, but automated access to an internal endpoint).
-    // New installs default to statusline; existing installs are pinned to whatever
-    // they were using by migrateSourceDefault(), so this default only reaches them.
+    // resolveSourceOnce() settles and PERSISTS a source at first boot, so in
+    // practice s.source is always set; this default is the fallback for a state
+    // file we couldn't read, and it must stay on the safe side of that.
     source: s.source === 'endpoint' ? 'endpoint' : 'statusline',
+    // Did the user actually answer the ToS gate for the endpoint? Only ever set
+    // by that dialog — an endpoint pin written by a migration has no such mark.
+    endpointConsent: s.endpointConsent === true,
+    // Set once when an un-consented endpoint pin was moved back to the clean
+    // source, so Settings can say why instead of the switch looking arbitrary.
+    endpointResetAt: typeof s.endpointResetAt === 'number' ? s.endpointResetAt : 0,
   };
 }
-function setSetting(key, val) {
+// setSetting rewrites the whole whitelisted settings object, so any companion
+// field (the consent mark) has to travel with it or it would be dropped here.
+function setSetting(key, val, extra) {
   const s = getSettings();
   s[key] = val;
+  if (extra) Object.assign(s, extra);
   saveState({ settings: s });
 }
 const ALLOWED_THEMES = ['classic', 'bloodthirsty', 'zombie'];
@@ -214,6 +332,29 @@ function applyStartup() {
 }
 
 // ---- Window ----
+// Chromium's default reaction to a file or link DROPPED on a window is to
+// navigate that window to the dropped target. This widget is frameless,
+// always-on-top and visible on every workspace, so it sits in the path of every
+// drag across the desktop — and the preload bridge SURVIVES an in-window
+// navigation, which would hand a dropped remote page the entire
+// window.claudeCount API: statuslineApply() rewrites another application's
+// settings.json, settingsSet('source','endpoint') switches on the ban-risk data
+// source, quit() kills the app. On top of that the widget is never destroyed
+// (close only hides it), so a single stray drop bricked it until relaunch.
+// Pin both windows to the file they were loaded with: nothing navigates them,
+// nothing opens a child window from them. (The renderers also swallow
+// dragover/drop, so it takes two failures to get here.)
+function lockNavigation(bw) {
+  bw.webContents.on('will-navigate', (e, url) => {
+    if (url !== bw.webContents.getURL()) e.preventDefault();
+  });
+  bw.webContents.on('will-redirect', (e, url) => {
+    if (url !== bw.webContents.getURL()) e.preventDefault();
+  });
+  bw.webContents.setWindowOpenHandler(() => ({ action: 'deny' })); // links open in the user's browser via shell.openExternal, never in a bridged window
+  bw.webContents.on('will-attach-webview', (e) => e.preventDefault());
+}
+
 function createWindow() {
   const st = loadState();
   collapsed = !!st.collapsed;
@@ -248,6 +389,7 @@ function createWindow() {
   win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
+  lockNavigation(win);
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.once('ready-to-show', () => {
@@ -281,10 +423,45 @@ function targetHeight() {
   return extMore ? H_EXT_MORE : H_EXTENDED;
 }
 
+// Every resize goes through here. The window grows DOWNWARD from its current
+// top-left, and the heights involved are not small: 60 (collapsed) or 218
+// (simple) can become 380-760 (extended). A widget legitimately parked near the
+// bottom edge therefore pushed most of the expanded pane off-screen — and it's
+// non-resizable with overflow:hidden, so that content was simply unreachable.
+// Boot-time clamping only ever guaranteed the height it ran with, so re-clamp
+// against the work area on every height change.
 function applyBounds() {
   if (!win) return;
   const [x, y] = win.getPosition();
-  win.setBounds({ x, y, width: WIN_W, height: targetHeight() });
+  const h = targetHeight();
+  const p = clampPosition(x, y, h);
+  win.setBounds({ x: p.x, y: p.y, width: WIN_W, height: h });
+  // Deliberately NOT persisted. This nudge is a consequence of the height we're
+  // showing right now, not a place the user put the window: persisting it would
+  // let one expand permanently move a widget they had parked at the bottom
+  // corner, and collapsing again would leave it somewhere they never chose.
+  // The saved x/y stays theirs; a real drag is what updates it (persistPos).
+}
+
+// The display topology changed under a running widget. The saved x/y was only
+// clamped once, at boot, so unplugging the monitor that held the widget (or
+// shrinking its work area — resolution change, a dock/taskbar appearing) left
+// this always-on-top window stranded off every screen: invisible, with no way
+// back short of quitting and relaunching. Re-clamp it into a visible work area.
+let reclampTimer = null;
+function reclampWindow() {
+  if (!win || win.isDestroyed()) return;
+  const [x, y] = win.getPosition();
+  const p = clampPosition(x, y);
+  if (p.x !== x || p.y !== y) { win.setPosition(p.x, p.y); saveState({ x: p.x, y: p.y }); }
+}
+function wireDisplayEvents() {
+  // Debounced: unplugging a monitor fires several events, and the OS reports
+  // its final work areas a beat after the first one.
+  const onChange = () => { clearTimeout(reclampTimer); reclampTimer = setTimeout(reclampWindow, 400); };
+  screen.on('display-removed', onChange);
+  screen.on('display-added', onChange);
+  screen.on('display-metrics-changed', onChange);
 }
 
 function setCollapsed(next) {
@@ -386,12 +563,21 @@ async function poll() {
         if ((usage.fiveHour || usage.sevenDay) && loadState().sawStatuslineRateLimits !== true) {
           saveState({ sawStatuslineRateLimits: true });
         }
+        // (the matching latch DROP lives in the catch below — see .subscriberLatchExpired)
         saveState({ paceSamples });
         lastGood = usage;
         lastError = null;
         if (win) win.webContents.send('usage:update', usage);
         updateTrayTitle(usage);
       } catch (err) {
+        // The reader decayed its in-memory latch after a sustained windowless
+        // run: this account really has stopped getting subscription windows
+        // (Pro lapsed into API-key/Console billing). Drop the persisted flag too,
+        // or every restart hands back a fresh grace period and the widget never
+        // settles into the cost-only layout it should now be showing.
+        if (err.subscriberLatchExpired && loadState().sawStatuslineRateLimits === true) {
+          saveState({ sawStatuslineRateLimits: false });
+        }
         lastError = {
           message: err.message, expired: !!err.expired, noCredential: !!err.noCredential,
           needsSetup: !!err.needsSetup, at: Date.now(), last: lastGood,
@@ -480,7 +666,11 @@ function pollNow() {
 // (up to ~90s) even though Claude Code already refreshed the token. We watch the
 // *directory* (not the file) so the watcher survives the atomic rename-replace
 // Claude Code uses when rewriting the file. Read-only — our own polls never write
-// the file, so this can't feed back on itself.
+// the file, so this can't feed back on itself. That's also why a null filename
+// (fs.watch doesn't always report one) is accepted here as a plain "something
+// changed, re-poll": nothing we do writes into ~/.claude, so a spurious poll
+// can't trigger another one. The statusLine watcher below sits on a directory we
+// DO write to and needs the stricter treatment — see the note there.
 let credWatcher = null;
 let credWatchDebounce = null;
 let credWatchRetry = null;
@@ -515,12 +705,40 @@ function scheduleWatchRetry() {
 // covers if watching fails). userData always exists, so no retry dance here.
 let slWatcher = null;
 let slDebounce = null;
+let slMtimeSig = '';
+// Fingerprint of the capture files' mtimes — the fallback for events that don't
+// say which file changed (see below).
+function captureMtimeSig() {
+  const dir = app.getPath('userData');
+  let sig = '';
+  try {
+    for (const n of fs.readdirSync(dir)) {
+      if (!isCaptureFileName(n)) continue;
+      try { sig += n + ':' + fs.statSync(path.join(dir, n)).mtimeMs + ';'; } catch (_) { /* raced with a rename; the next event catches it */ }
+    }
+  } catch (_) { /* unreadable dir: treat as "no change", timed polling still covers */ }
+  return sig;
+}
 function watchStatusline() {
   unwatchStatusline();
   if (getSettings().source !== 'statusline') return;
+  slMtimeSig = captureMtimeSig();
   try {
     slWatcher = fs.watch(app.getPath('userData'), (_evt, fname) => {
-      if (fname && !isCaptureFileName(fname)) return; // ignore the capture script, *.tmp, unrelated files
+      if (fname) {
+        if (!isCaptureFileName(fname)) return; // ignore the capture script, *.tmp, unrelated files
+      } else {
+        // fs.watch is documented to hand us a null filename on some platforms,
+        // and unlike the credential watcher this directory is one WE write to:
+        // every successful poll saves paceSamples into state.json here, plus the
+        // JSONL cache. Letting a null through unfiltered therefore made each
+        // poll's own write trigger the next poll — a self-sustaining ~400ms loop
+        // for as long as the data stayed fresh. When we can't tell what changed,
+        // ask the capture files directly: no capture moved, no poll.
+        const sig = captureMtimeSig();
+        if (sig === slMtimeSig) return;
+        slMtimeSig = sig;
+      }
       clearTimeout(slDebounce);
       slDebounce = setTimeout(() => { if (!paused) pollNow(); }, 400);
     });
@@ -611,8 +829,14 @@ function installUpdate() {
 // Self-update only works on the packaged NSIS install (the portable build and a
 // `npm start` dev run can't apply an update), so the manual check is offered only
 // there — elsewhere the Settings block and tray item hide themselves.
+// macOS is excluded ON PURPOSE, even though it's packaged and non-portable: the
+// mac build ships unsigned (identity:null — the README documents the Gatekeeper
+// "damaged" workaround), and electron-updater hands the install to Squirrel.Mac,
+// which hard-requires a signed app. The download therefore always failed into
+// the silent 'error' handler and the banner reverted to "available" forever —
+// an offer that could never be honoured. Mac users update from the DMG.
 function updatesSupported() {
-  return app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR;
+  return app.isPackaged && process.platform !== 'darwin' && !process.env.PORTABLE_EXECUTABLE_DIR;
 }
 // Compare simple x.y.z versions: is `a` newer than `b`?
 function isNewerVersion(a, b) {
@@ -657,9 +881,10 @@ async function trayCheckUpdates() {
 
 // Update via GitHub releases (packaged app only; NSIS — the portable doesn't update).
 function setupUpdater() {
-  // Packaged NSIS install only. The portable build can't self-update (latest.yml
-  // points at the installer), so skip it there (electron-builder sets this env).
-  if (!app.isPackaged || process.env.PORTABLE_EXECUTABLE_DIR) return;
+  // Packaged NSIS install only — same test the UI uses, so a platform that can't
+  // apply an update never lights the banner or the tray item either (the
+  // portable build's latest.yml points at the installer; macOS is unsigned).
+  if (!updatesSupported()) return;
   // Consent-first: the Windows build is unsigned, and electron-updater can't
   // verify signatures on an unsigned app — so nothing is ever downloaded
   // silently. We only check metadata; the user starts the download from the
@@ -723,6 +948,7 @@ function openSettings() {
     },
   });
   settingsWin.setMenuBarVisibility(false);
+  lockNavigation(settingsWin); // same bridge, same drop hazard — and this window owns the consent controls
   settingsWin.loadFile(path.join(__dirname, 'renderer', 'settings.html'));
   settingsWin.on('closed', () => { settingsWin = null; });
 }
@@ -793,8 +1019,22 @@ ipcMain.handle('statusline:inspect', () => {
   const cmd = captureCommand(app.getPath('userData'));
   return { ...claudeSettings.inspect(cmd), nodeOk: claudeSettings.nodeAvailable() };
 });
-ipcMain.handle('statusline:apply', () => {
+// This app has exactly two consent decisions — destructively editing ANOTHER
+// application's config, and switching on the data source that knowingly violates
+// Anthropic's Consumer Terms — and both dialogs live in the renderer. Main must
+// not simply believe an IPC message that asks for either: the renderer is a
+// window sitting in every drag path on the desktop (see lockNavigation), so
+// "the renderer asked" is not "the user agreed". The caller has to state that
+// the prompt was actually answered.
+ipcMain.handle('statusline:apply', (_e, opts) => {
   const cmd = captureCommand(app.getPath('userData'));
+  // Replacing a statusLine the user configured themselves is the destructive
+  // case, and the only one that needs the confirmation. A first-time setup (no
+  // statusLine at all) and a re-apply of our own command need nothing.
+  const cur = claudeSettings.inspect(cmd);
+  if (cur.currentCmd && !cur.isMine && !(opts && opts.confirmReplace === true)) {
+    return { ok: false, error: 'needs_confirm', currentCmd: cur.currentCmd };
+  }
   ensureCaptureScript(app.getPath('userData')); // guarantee the script is on disk before we point Claude Code at it
   const res = claudeSettings.apply(cmd);
   if (res.ok) {
@@ -805,9 +1045,18 @@ ipcMain.handle('statusline:apply', () => {
   return res;
 });
 ipcMain.on('settings:set', (_e, payload) => {
-  const { k, v } = payload || {}; // tolerate a malformed/empty payload
+  const { k, v, consent } = payload || {}; // tolerate a malformed/empty payload
   if (!validSetting(k, v)) return; // reject unknown key / invalid value
-  setSetting(k, v);
+  // Moving ONTO the endpoint is the ban-risk decision: refuse unless the caller
+  // states the ToS gate was answered. Only the transition needs it — re-setting
+  // a source that's already applied changes nothing, and every move BACK to
+  // statusline is always allowed.
+  if (k === 'source' && v === 'endpoint' && getSettings().source !== 'endpoint' && consent !== true) return;
+  // Record the answered gate alongside the source itself, and clear the
+  // "we moved you" notice — whichever way they just chose, they've now seen it.
+  setSetting(k, v, k === 'source'
+    ? { endpointConsent: v === 'endpoint' ? true : getSettings().endpointConsent, endpointResetAt: 0 }
+    : null);
   if (k === 'startWithOS') applyStartup();
   if (k === 'language') {
     const loc = effectiveLocale();
@@ -849,11 +1098,12 @@ if (!gotLock) {
     if (process.platform === 'win32') app.setAppUserModelId('com.countclaudula.app');
     setCacheDir(app.getPath('userData')); // JSONL aggregation survives restarts
     migrateLegacyState();
-    migrateSourceDefault(); // pin existing installs to their source before the new default applies
+    resolveSourceOnce(); // settle the data source before anything else can write state
     restorePaceSamples();  // warm the burn-rate buffer so the hint isn't blank after a restart
     createWindow();
     buildTray();
     wirePowerEvents();
+    wireDisplayEvents(); // an unplugged monitor must not strand the widget off-screen
     applyStartup();
     if (getSettings().source === 'statusline') ensureCaptureScript(app.getPath('userData'));
     pollNow();
@@ -866,6 +1116,7 @@ if (!gotLock) {
     clearTimeout(pollTimer);
     clearTimeout(credWatchDebounce);
     clearTimeout(credWatchRetry);
+    clearTimeout(reclampTimer);
     try { if (credWatcher) credWatcher.close(); } catch (_) {}
     unwatchStatusline();
     flushCache(); // a pending debounced save must not be lost on quit

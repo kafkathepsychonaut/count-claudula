@@ -11,7 +11,7 @@ the system tray.
 
 Get the latest from **[Releases ↗](../../releases/latest)**:
 
-- **Windows** — `Count-Claudula-Setup-x.y.z.exe` (installer) or `Count Claudula.exe` (portable, no install)
+- **Windows** — `Count-Claudula-Setup-x.y.z.exe` (installer) or `Count-Claudula-x.y.z.exe` (portable, no install)
 - **macOS** (Apple Silicon) — `Count-Claudula-x.y.z-arm64.dmg`
 - **Linux** — `Count-Claudula-x.y.z.AppImage`
 

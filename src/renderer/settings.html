@@ -119,10 +119,17 @@
 
     <div class="field">
       <label data-i18n="set_source">Data source</label>
+      <!-- data-i18n so applyLabels() translates these too: this dropdown picks
+           between the Terms-safe default and the ban-risk endpoint, and a
+           hardcoded English "(default)" hides that from most of our users -->
       <select id="source">
-        <option value="statusline">Claude Code statusLine (default)</option>
-        <option value="endpoint">Anthropic endpoint</option>
+        <option value="statusline" data-i18n="source_opt_statusline">Claude Code statusLine (default)</option>
+        <option value="endpoint" data-i18n="source_opt_endpoint">Anthropic endpoint</option>
       </select>
+      <!-- shown once when an un-consented endpoint pin was moved back to the
+           clean source at boot; silently changing someone's data source is the
+           bug this whole change exists to fix, so say it out loud -->
+      <div class="hint" id="source-moved" data-i18n="source_moved" style="display: none;"></div>
     </div>
     <div class="hint" id="source-hint" style="display: none;">
       <span data-i18n="source_hint">Use this command as your statusLine in Claude Code (settings.json). Data refreshes only while Claude Code is running.</span>
