@@ -8,6 +8,11 @@ document.addEventListener('drop', (e) => e.preventDefault());
 
 const api = window.claudeCount;
 let locale = 'en';
+// applyLabels() rewrites every [data-i18n] node from the dictionary, which would
+// undo the update button's "Get the new version" state on a language change —
+// leaving a button labelled "Check for updates" that actually opens a download
+// page. Set while that offer stands, so the locale handler can restore it.
+let relabelUpdBtn = null;
 
 function applyLabels() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -220,7 +225,12 @@ async function init() {
     const setStatus = (text, ok) => { updStatus.textContent = text; updStatus.className = 'upd-status' + (ok ? ' ok' : ''); };
     updField.style.display = '';
     setStatus('v' + (data.appVersion || ''));
+    // macOS can check but not install (unsigned build — see the note in main.js).
+    // Once a check finds something, the button stops being "check again" and
+    // becomes the way out: it opens the releases page.
+    let offerPage = false;
     updBtn.addEventListener('click', async () => {
+      if (offerPage) { api.updatePage(); return; }
       updBtn.disabled = true;
       setStatus(window.I18N.t(locale, 'update_checking'));
       let r = { state: 'error' };
@@ -229,7 +239,14 @@ async function init() {
       // download is already running or a tray-initiated check holds the latch.
       // Those states must not fall through to "you're on the latest version" —
       // that asserted the opposite of the truth while a newer build downloaded.
-      if (r.state === 'available') setStatus(window.I18N.t(locale, 'update_found') + ' (v' + r.version + ')', true);
+      if (r.state === 'available') {
+        setStatus(window.I18N.t(locale, 'update_found') + ' (v' + r.version + ')', true);
+        if (data.updateManual) {
+          offerPage = true;
+          relabelUpdBtn = () => { updBtn.textContent = window.I18N.t(locale, 'update_get'); };
+          relabelUpdBtn();
+        }
+      }
       else if (r.state === 'error') setStatus(window.I18N.t(locale, 'update_check_error'));
       else if (r.state === 'ready') setStatus(window.I18N.t(locale, 'update_restart'), true);
       else if (r.state === 'downloading') setStatus(window.I18N.t(locale, 'update_downloading') + (r.version ? ' (v' + r.version + ')' : ''), true);
@@ -274,6 +291,7 @@ api.onLocale((loc) => {
   const cur = sel.value;
   buildLangOptions(window.I18N.LANGS, cur);
   applyLabels();
+  if (relabelUpdBtn) relabelUpdBtn(); // applyLabels just reset it to "Check for updates"
 });
 
 init();

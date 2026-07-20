@@ -1070,6 +1070,27 @@
   };
   for (const k in SOURCE_SCOPE_NOTE) if (DICT[k]) DICT[k].source_scope_note = SOURCE_SCOPE_NOTE[k];
 
+  // macOS: the app can check for updates but can't install them (unsigned
+  // build), so the offer is "open the download page", never "download update".
+  // Full 37-language coverage because this is the ONLY notice a Mac user ever
+  // gets that a new version exists — falling back to English would bury it.
+  const UPDATE_GET = {
+    en: 'Get the new version', es: 'Obtener la nueva versión', pt: 'Baixar a nova versão',
+    fr: 'Obtenir la nouvelle version', de: 'Neue Version holen', it: 'Scarica la nuova versione',
+    nl: 'Nieuwe versie ophalen', pl: 'Pobierz nową wersję', ru: 'Скачать новую версию',
+    uk: 'Завантажити нову версію', cs: 'Získat novou verzi', sk: 'Získať novú verziu',
+    ro: 'Descarcă versiunea nouă', hu: 'Új verzió letöltése', el: 'Λήψη νέας έκδοσης',
+    sv: 'Hämta nya versionen', da: 'Hent den nye version', fi: 'Hae uusi versio',
+    nb: 'Hent ny versjon', tr: 'Yeni sürümü al', ca: 'Obtén la nova versió',
+    bg: 'Изтегли новата версия', hr: 'Preuzmi novu verziju', sr: 'Преузми нову верзију',
+    lt: 'Atsisiųsti naują versiją', ja: '新しいバージョンを入手', ko: '새 버전 받기',
+    zh: '获取新版本', vi: 'Tải phiên bản mới', th: 'ดาวน์โหลดเวอร์ชันใหม่',
+    id: 'Dapatkan versi baru', ms: 'Dapatkan versi baharu', fil: 'Kunin ang bagong bersyon',
+    hi: 'नया संस्करण पाएँ', ar: 'احصل على الإصدار الجديد', he: 'הורד את הגרסה החדשה',
+    fa: 'دریافت نسخه جدید',
+  };
+  for (const k in UPDATE_GET) if (DICT[k]) DICT[k].update_get = UPDATE_GET[k];
+
   // macOS-only display choice: the floating widget, or the percentages written
   // into the menu bar next to the icon. en/es/pt; every other locale falls back
   // to English via t() until the rest are translated.

@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('claudeCount', {
   setExtMore: (v) => ipcRenderer.send('ui:extmore', v),
   reportHeight: (h) => ipcRenderer.send('ui:height', h),
   updateDownload: () => ipcRenderer.send('ui:update-download'),
+  // macOS: the app can't install an update, so the banner opens the releases page
+  updatePage: () => ipcRenderer.send('ui:update-page'),
   updateRestart: () => ipcRenderer.send('ui:update-restart'),
   updateDismiss: () => ipcRenderer.send('ui:update-dismiss'),
   hide: () => ipcRenderer.send('ui:hide'),

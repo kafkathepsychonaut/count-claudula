@@ -37,6 +37,8 @@ const STATE_FILE = path.join(app.getPath('userData'), 'state.json');
 // anything on its own.
 const FEEDBACK_EMAIL = 'kafkathepsychonaut@gmail.com';
 const DONATE_URL = 'https://ko-fi.com/kafkathepsychonaut';
+// Where a macOS user is sent to fetch a build the app can't install for them.
+const RELEASES_URL = 'https://github.com/kafkathepsychonaut/count-claudula/releases/latest';
 const THEME_BG = { classic: '#F4F1EA', bloodthirsty: '#1B1113', zombie: '#141017' };
 
 let win = null;
@@ -864,8 +866,12 @@ function rebuildTrayMenu() {
   if (updateReady) {
     items.push({ type: 'separator' }, { label: i18n.t(L, 'update_restart'), click: installUpdate });
   } else if (updateAvailable && !updateDownloading) {
-    items.push({ type: 'separator' }, { label: i18n.t(L, 'update_download'), click: startUpdateDownload });
-  } else if (updatesSupported()) {
+    // macOS gets "Get the new version" (opens the releases page) — offering
+    // "Download update" there would promise an install that can't happen.
+    items.push({ type: 'separator' }, manualUpdate()
+      ? { label: i18n.t(L, 'update_get'), click: openReleasesPage }
+      : { label: i18n.t(L, 'update_download'), click: startUpdateDownload });
+  } else if (updatesSupported() || manualUpdate()) {
     items.push({ type: 'separator' }, { label: i18n.t(L, 'update_check'), click: trayCheckUpdates });
   }
   items.push({ type: 'separator' }, { label: i18n.t(L, 'tray_quit'), click: () => { quitting = true; app.quit(); } });
@@ -876,7 +882,9 @@ function rebuildTrayMenu() {
 function updateUiState() {
   if (updateReady) return { state: 'ready', version: updateVersion };
   if (updateDownloading) return { state: 'downloading', version: updateVersion, percent: updateProgress };
-  if (updateAvailable && !updateSnoozed) return { state: 'available', version: updateVersion };
+  // `manual` = clicking opens the releases page instead of downloading in place.
+  // On macOS that's the only honest offer; 'downloading'/'ready' never occur there.
+  if (updateAvailable && !updateSnoozed) return { state: 'available', version: updateVersion, manual: manualUpdate() };
   return { state: 'none' };
 }
 // Keep both surfaces in sync. Download progress skips the tray rebuild —
@@ -886,12 +894,18 @@ function syncUpdateUi(progressOnly) {
   if (win) win.webContents.send('update:state', updateUiState());
 }
 function startUpdateDownload() {
+  // On macOS this must never run: the download always failed into the silent
+  // 'error' handler, which is the whole reason updates were hidden there.
+  if (manualUpdate()) return openReleasesPage();
   if (!updateAvailable || updateDownloading || updateReady) return;
   updateSnoozed = false; // an explicit download un-snoozes the banner (shows progress)
   updateDownloading = true;
   updateProgress = 0;
   syncUpdateUi();
   autoUpdater.downloadUpdate().catch(() => { updateDownloading = false; syncUpdateUi(); });
+}
+function openReleasesPage() {
+  shell.openExternal(RELEASES_URL).catch(() => {});
 }
 function installUpdate() {
   if (!updateReady) return;
@@ -912,6 +926,17 @@ function installUpdate() {
 function updatesSupported() {
   return app.isPackaged && process.platform !== 'darwin' && !process.env.PORTABLE_EXECUTABLE_DIR;
 }
+// macOS can't INSTALL an update, but it can still be TOLD there is one —
+// checking is a metadata fetch, and only the install needs the signature
+// Squirrel.Mac demands. Silence was the wrong trade: a Mac user had no way to
+// learn a new version existed short of visiting GitHub on a hunch, so a fix
+// aimed at them could sit unnoticed forever. In this mode the banner, the tray
+// item and Settings all offer the download PAGE instead of an install.
+// (The portable Windows build is still fully silent — same could be done there,
+// but that's a separate change to a platform that already self-updates.)
+function manualUpdate() {
+  return app.isPackaged && process.platform === 'darwin' && !process.env.PORTABLE_EXECUTABLE_DIR;
+}
 // Compare simple x.y.z versions: is `a` newer than `b`?
 function isNewerVersion(a, b) {
   const pa = String(a).split('.').map((n) => parseInt(n, 10) || 0);
@@ -924,7 +949,7 @@ function isNewerVersion(a, b) {
 // must always say something. The events in setupUpdater still light the banner.
 let manualChecking = false;
 async function runManualCheck() {
-  if (!updatesSupported()) return { state: 'unsupported' };
+  if (!updatesSupported() && !manualUpdate()) return { state: 'unsupported' };
   if (updateReady) return { state: 'ready', version: updateVersion };
   if (updateDownloading) return { state: 'downloading', version: updateVersion };
   if (manualChecking) return { state: 'checking' };
@@ -958,13 +983,16 @@ function setupUpdater() {
   // Packaged NSIS install only — same test the UI uses, so a platform that can't
   // apply an update never lights the banner or the tray item either (the
   // portable build's latest.yml points at the installer; macOS is unsigned).
-  if (!updatesSupported()) return;
+  if (!updatesSupported() && !manualUpdate()) return;
   // Consent-first: the Windows build is unsigned, and electron-updater can't
   // verify signatures on an unsigned app — so nothing is ever downloaded
   // silently. We only check metadata; the user starts the download from the
   // tray ("Download update") and the install happens on restart/quit.
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // macOS: never let electron-updater stage anything on quit either. Nothing is
+  // ever downloaded there, but this mode exists precisely because the install
+  // path is broken — don't leave a door open to it.
+  autoUpdater.autoInstallOnAppQuit = !manualUpdate();
   autoUpdater.on('update-available', (info) => {
     updateAvailable = true;
     updateVersion = (info && info.version) || '';
@@ -1070,6 +1098,7 @@ ipcMain.on('ui:mode', (_e, m) => setMode(m));
 ipcMain.on('ui:extmore', (_e, v) => setExtMore(!!v));
 ipcMain.on('ui:height', (_e, h) => setExtHeight(h));
 ipcMain.on('ui:update-download', startUpdateDownload);
+ipcMain.on('ui:update-page', openReleasesPage);
 ipcMain.on('ui:update-restart', installUpdate);
 ipcMain.on('ui:update-dismiss', () => {
   // banner-only snooze for this version — the tray menu keeps offering it
@@ -1090,7 +1119,10 @@ ipcMain.handle('settings:get', () => ({
   langs: i18n.LANGS,
   locale: effectiveLocale(),
   statuslineCmd: captureCommand(app.getPath('userData')),
-  updatesSupported: updatesSupported(),
+  // the Updates block also shows on macOS now — as a "check + open the page"
+  // control, since the install itself is impossible there (updateManual)
+  updatesSupported: updatesSupported() || manualUpdate(),
+  updateManual: manualUpdate(),
   appVersion: app.getVersion(),
   // the menu bar choice only exists on macOS — Settings hides the row elsewhere
   platform: process.platform,

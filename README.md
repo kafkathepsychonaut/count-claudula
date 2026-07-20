@@ -85,9 +85,10 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   ask it to via **Settings → Check for updates** or the tray — but it **never
   downloads one silently**: you start the download from the in-widget banner or
   the tray menu; the banner can be dismissed per version, and "restart to
-  update" asks for a confirming second click. The portable build and **the macOS
-  build** don't even check — macOS updates have to be downloaded manually, see
-  below. There is no usage telemetry either way.)
+  update" asks for a confirming second click. **On macOS** it checks and tells
+  you, but can't install: the banner, the tray item and Settings open the
+  Releases page instead — see below. The portable build doesn't check at all.
+  There is no usage telemetry either way.)
 
 > ⚠️ **Heads up on Anthropic's Terms — read this.** The **opt-in endpoint
 > source** (no longer the default — see below) uses your Claude Code OAuth token
@@ -208,10 +209,15 @@ xattr -cr "/Applications/Count Claudula.app"
 
 The same missing signature is why **the macOS build never self-updates**: the
 installer machinery Electron uses on macOS requires a signed app, so a download
-started in-app could only ever fail. Rather than fake a working update flow, the
-widget hides update checks entirely on macOS — grab the new `.dmg` from
-[Releases](https://github.com/kafkathepsychonaut/count-claudula/releases) and
-drag it over, repeating the `xattr` step above.
+started in-app could only ever fail.
+
+It does still **tell you** when a new version exists — checking is just a
+metadata fetch, and only the install needs the signature. The banner, the tray
+item and **Settings → Check for updates** all read *"Get the new version"* on
+macOS and open
+[Releases](https://github.com/kafkathepsychonaut/count-claudula/releases) in
+your browser; grab the new `.dmg`, drag it over, and repeat the `xattr` step
+above. Signing (and with it real self-updating) is planned.
 
 ## Disclaimer
 

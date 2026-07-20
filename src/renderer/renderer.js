@@ -114,7 +114,9 @@ function renderUpdate() {
   let label;
   if (updState.state === 'ready') label = updConfirm ? t('update_confirm') : t('update_restart');
   else if (updState.state === 'downloading') label = t('updating') + (updState.percent ? ' ' + updState.percent + '%' : '');
-  else label = t('update_download') + (updState.version ? ' · v' + updState.version : '');
+  // manual (macOS): the click opens the download page, so the label must not
+  // promise an install the app can't perform
+  else label = t(updState.manual ? 'update_get' : 'update_download') + (updState.version ? ' · v' + updState.version : '');
   $('upd-label').textContent = label;
   upd.classList.toggle('dismissable', updState.state === 'available');
 }
@@ -703,7 +705,8 @@ $('upd').addEventListener('click', () => {
     updConfirm = setTimeout(() => { updConfirm = null; renderUpdate(); }, 5000);
     renderUpdate();
   } else if (updState.state === 'available') {
-    api.updateDownload();
+    if (updState.manual) api.updatePage(); // macOS: open the releases page in the browser
+    else api.updateDownload();
   }
 });
 $('upd-x').addEventListener('click', (e) => {
