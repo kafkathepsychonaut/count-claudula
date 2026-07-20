@@ -654,8 +654,13 @@ function doRefresh() {
 }
 $('btn-refresh').addEventListener('click', doRefresh);
 // the status word doubles as a retry button whenever it reports a problem —
-// its tooltips already say "press refresh"; let the text be the button
-$('status').addEventListener('click', () => { if (stale) doRefresh(); });
+// its tooltips already say "press refresh"; let the text be the button.
+// Except "set up statusLine": refreshing can't fix a source that was never
+// wired up, so the click would look dead. Send them where the fix lives.
+$('status').addEventListener('click', () => {
+  if (setupFlag) { api.openSettings(); return; }
+  if (stale) doRefresh();
+});
 $('btn-hide').addEventListener('click', () => api.hide());
 $('upd').addEventListener('click', () => {
   if (!updState) return;
