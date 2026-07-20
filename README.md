@@ -15,7 +15,10 @@ Get the latest from **[Releases ↗](../../releases/latest)**:
 - **macOS** (Apple Silicon) — `Count-Claudula-x.y.z-arm64.dmg`
 - **Linux** — `Count-Claudula-x.y.z.AppImage`
 
-Requires Claude Code installed and logged in. The binaries are unsigned (see
+Requires Claude Code installed, logged in, and **run in a terminal** — the limit
+bars come from its statusLine, which the IDE extension panel and the desktop app
+don't execute ([details](#the-default-source-claude-code-statusline)). The
+binaries are unsigned (see
 *Why isn't the `.exe` signed?* and *macOS says the app "is damaged"* below).
 On an Intel Mac, build from source.
 
@@ -45,7 +48,7 @@ On an Intel Mac, build from source.
 
 ## How it works (and what it touches)
 
-The widget has **two data sources**. New installs default to the **Claude Code
+The widget has **two data sources**. It defaults to the **Claude Code
 statusLine** source — fully local, no endpoint, nothing Anthropic hasn't
 sanctioned (described [below](#the-default-source-claude-code-statusline)). The
 other source is **opt-in** and reads the number from the **same status endpoint
@@ -57,7 +60,9 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
 
 - **It only reads** your local credential at `~/.claude/.credentials.json` (or
   `$CLAUDE_CONFIG_DIR`) — the same file Claude Code maintains — and makes one
-  read-only GET to that endpoint. **It never writes that file and never refreshes
+  read-only GET to that endpoint. **On macOS** that credential lives in the login
+  Keychain instead, so this source reads it with `security find-generic-password`
+  (read-only, and macOS may ask you to allow it once). **It never writes that file and never refreshes
   or mints tokens** (it doesn't impersonate the official client). The token is kept
   fresh by Claude Code itself as you use it, and the widget re-checks the moment that
   file changes; if it goes stale the widget nudges you to *"open Claude Code"*. Only
@@ -75,8 +80,9 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
   ask it to via **Settings → Check for updates** or the tray — but it **never
   downloads one silently**: you start the download from the in-widget banner or
   the tray menu; the banner can be dismissed per version, and "restart to
-  update" asks for a confirming second click. The portable build doesn't even
-  check. There is no usage telemetry either way.)
+  update" asks for a confirming second click. The portable build and **the macOS
+  build** don't even check — macOS updates have to be downloaded manually, see
+  below. There is no usage telemetry either way.)
 
 > ⚠️ **Heads up on Anthropic's Terms — read this.** The **opt-in endpoint
 > source** (no longer the default — see below) uses your Claude Code OAuth token
@@ -110,19 +116,34 @@ GET https://api.anthropic.com/api/oauth/usage   (Bearer = your Claude Code OAuth
 
 ### The default source: Claude Code statusLine
 
-New installs use the data Claude Code itself pipes into its
+This source reads the data Claude Code itself pipes into its
 [statusLine](https://code.claude.com/docs/en/statusline) — a sanctioned channel,
-**no credential read, no endpoint call at all**. On first run the widget writes a
+**no credential read, no endpoint call at all**.
+
+> ⚠️ **Run Claude Code in a terminal.** statusLine belongs to the Claude Code
+> **CLI's terminal interface**. The IDE extension panel (VS Code, Cursor,
+> Antigravity, …) and the Claude **desktop app** never execute it — so on those
+> surfaces your `settings.json` can be perfectly correct and the widget still
+> receives nothing. Run `claude` in a terminal; your IDE's built-in terminal
+> counts. There is no supported way to get limit data on the other surfaces.
+>
+> Two more things about the bars: the 5h/7d percentages come from `rate_limits`,
+> which Claude Code sends **only to claude.ai Pro/Max subscribers**, and **only
+> after the first API response of a session**. So a freshly opened session shows
+> no bars until you actually send one message, and API-key / Console accounts
+> never get them (the token and cost panels still work).
+
+On first run the widget writes a
 tiny capture script and shows you (Settings → **Data source**) the exact command
 to set as `statusLine` in Claude Code's `settings.json` — a **one-time setup**;
 until you do it the widget shows a *"set up statusLine"* nudge. **Configure
 automatically** writes it into `settings.json` for you (it backs the file up,
 merges rather than overwrites, asks before replacing an existing statusLine, and
 warns if `node` isn't on your PATH). The script also
-prints a usable status line (model + 5h/7d %). Every open Claude Code window
-writes its own capture file and the widget **aggregates them** (highest reading
-in the current window wins), so running 20 sessions at once keeps the numbers
-fresh instead of flickering — it never dips below the truth. Trade-off: the
+prints a usable status line (model + 5h/7d %). Every open Claude Code **terminal
+session** writes its own capture file and the widget **aggregates them** (highest
+reading in the current window wins), so running 20 sessions at once keeps the
+numbers fresh instead of flickering — it never dips below the truth. Trade-off: the
 numbers only refresh **while a Claude Code session is generating** (idle sessions
 don't update, so the "updated HH:MM" line grows a `· 14m` age once it starts
 trailing), they don't include usage from the web/desktop apps, and this source
@@ -131,10 +152,15 @@ limit data — those surfaces show as **N/A** in the detailed view (so you can t
 "none" apart from "this source can't see it") — to get real numbers there, switch
 to the **endpoint** source (opt-in, with the Terms caveat above).
 
-**Upgrading from an earlier version?** If you were already on the endpoint, the
-widget keeps you there so your data source doesn't change under you — the new
-statusLine default only applies to fresh installs. Switch either way, any time,
-in Settings → Data source.
+**Upgrading from an earlier version?** If your install was on the **endpoint**
+source and you never passed the Terms warning to put it there, v1.4.8 moves you
+to the statusLine source once and says so in Settings → Data source. That is not
+a silent change of preference: versions v1.4.0–v1.4.7 had a migration bug that
+pinned installs to the endpoint **without ever asking**, and there is no way to
+tell those apart from an older install that was auto-pinned before the default
+flipped — neither ever agreed to it. If you do want the endpoint, pick it again
+in Settings → Data source; going through the Terms warning records the choice and
+nothing will move it afterwards.
 
 ## 🔍 Don't trust — audit, or build it yourself
 
@@ -174,6 +200,13 @@ in Terminal and open it normally:
 ```bash
 xattr -cr "/Applications/Count Claudula.app"
 ```
+
+The same missing signature is why **the macOS build never self-updates**: the
+installer machinery Electron uses on macOS requires a signed app, so a download
+started in-app could only ever fail. Rather than fake a working update flow, the
+widget hides update checks entirely on macOS — grab the new `.dmg` from
+[Releases](https://github.com/kafkathepsychonaut/count-claudula/releases) and
+drag it over, repeating the `xattr` step above.
 
 ## Disclaimer
 

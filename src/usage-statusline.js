@@ -1,9 +1,24 @@
 'use strict';
-// Alternative, ToS-clean data source. Claude Code pipes a JSON payload to the
+// THE DEFAULT data source (and, since v1.4.8, where an un-consented endpoint pin
+// gets moved). ToS-clean. Claude Code pipes a JSON payload to the
 // user's statusLine command on every status update, and that payload carries
 // rate_limits (the same 5h/7d percentages the endpoint reports) — no
-// credential read, no network. A tiny capture script (written to userData when
-// the user enables this source) persists each payload; we read the files here.
+// credential read, no network. A tiny capture script (written to userData on
+// every boot while this source is active — no user action needed) persists each
+// payload; we read the files here.
+//
+// TERMINAL ONLY — the constraint that decides whether this source works at all.
+// statusLine belongs to the Claude Code CLI's terminal UI. The IDE extension
+// panel (VS Code / Cursor / Antigravity) and the Claude desktop app NEVER run
+// it, so on those surfaces settings.json can be perfect and no capture file ever
+// appears. Verified against the docs 2026-07-20; there is no supported
+// alternative (OTel carries no rate_limits, hooks carry no usage, and the
+// extension's own session store is undocumented). main.js detects this exact
+// state — our command installed, zero captures — and says so, because "set up
+// statusLine" told those users to fix what was already correct.
+//
+// rate_limits itself is Pro/Max-only AND only present after a session's first
+// API response, so an opened-but-unprompted session legitimately has none.
 //
 // MULTI-SESSION: every Claude Code window shares the same settings.json, so they
 // all run the same statusLine command. If they all wrote ONE file, the last
@@ -15,9 +30,8 @@
 // within a window (until reset), so the max is the freshest truth and never
 // dips — 20 open windows make the data fresher, not broken.
 //
-// Trade-off vs the endpoint (why this is opt-in for some): the data only
-// refreshes while a Claude Code session is active, and it doesn't see usage
-// from web/desktop between those refreshes.
+// Trade-off vs the endpoint: the data only refreshes while a Claude Code session
+// is generating, and it doesn't see usage from web/desktop between refreshes.
 
 const fs = require('fs');
 const path = require('path');

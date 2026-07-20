@@ -1,7 +1,19 @@
 'use strict';
-// Aggregates TODAY's Claude Code tokens by reading the local JSONL files
-// (~/.claude/projects/**/*.jsonl). Claude Code (CLI) only — web/desktop don't log
-// locally. "API-equivalent" cost using current per-model prices + cache tiers.
+// Aggregates TODAY's Claude Code tokens by reading the local JSONL transcripts
+// under <config dir>/projects (see claude-paths — CLAUDE_CONFIG_DIR is honoured,
+// including one exported only from a shell profile). Claude Code (CLI) only —
+// web/desktop don't log locally. "API-equivalent" cost using current per-model
+// prices + cache tiers.
+//
+// DEDUPE is the correctness property this module lives or dies by. The same
+// response appears in the transcripts many times over: one line per content
+// block, one per streaming checkpoint, and a verbatim re-copy of the whole
+// history whenever a session is resumed or forked. Summing lines counted all of
+// them — today's figure ran ~2.5x high. Records are keyed by response identity
+// and the winner is the copy with the MAX output_tokens (the checkpoints grow,
+// so first-wins would undercount as badly as summing overcounts). That is also
+// why the on-disk cache stores per-response records rather than per-file totals:
+// a pre-summed total cannot be deduplicated against another file afterwards.
 
 const fs = require('fs');
 const path = require('path');
