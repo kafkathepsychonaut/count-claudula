@@ -15,6 +15,7 @@ let latest = null;            // last usage received
 let stale = false;            // last fetch failed -> showing stale data
 let expiredFlag = false;      // failed because the token expired (read-only mode)
 let setupFlag = false;        // statusLine source, but never wired up in Claude Code yet
+let notRunningFlag = false;   // ...it IS wired up, but Claude Code has never run it (non-terminal surface)
 let nocredFlag = false;       // API-key / Console account: no subscription windows exist
 let unavailableFlag = false;  // circuit breaker tripped: the endpoint keeps refusing
 let onboardPending = false;   // fresh install: show the first-run setup card when needsSetup arrives
@@ -299,7 +300,15 @@ function renderStatus(u) {
     // expired = token went stale; it's a normal idle state (Claude Code refreshes
     // it), so nudge calmly with the fix in the tooltip rather than an alarming red.
     // expired wins over unavailable: reopening Claude Code is the fix for both.
-    if (setupFlag) {
+    if (setupFlag && notRunningFlag) {
+      // Configured correctly, never executed. Almost always means Claude Code is
+      // being used somewhere that has no statusLine to render — the IDE extension
+      // panel or the desktop app. Sending this user to Settings would tell them
+      // to fix what is already right, so name the actual cause instead.
+      el.textContent = t('notrun');
+      el.title = t('notrun_hint');
+      el.className = 'status idle';
+    } else if (setupFlag) {
       // statusLine source chosen (the ToS-clean default) but Claude Code has
       // never piped a payload here yet — the fix is a one-time setup in Settings,
       // not "open Claude Code". Point there instead of the misleading idle nudge.
@@ -592,17 +601,20 @@ api.onUsage((u) => {
   renderAll();
 });
 
-api.onError(({ last, expired, needsSetup, noCredential, unavailable }) => {
+api.onError(({ last, expired, needsSetup, configuredNotRunning, noCredential, unavailable }) => {
   stale = true;
   expiredFlag = !!expired;
   setupFlag = !!needsSetup;
+  notRunningFlag = !!configuredNotRunning;
   nocredFlag = !!noCredential;
   unavailableFlag = !!unavailable;
   if (last) latest = last;
   stopSpin();
   // fresh install + statusLine never wired up: surface the setup card instead
-  // of hoping the user finds Settings → Data source on their own
-  if (setupFlag && onboardPending) { document.body.classList.add('has-onb'); reportHeight(); }
+  // of hoping the user finds Settings → Data source on their own. Not when it's
+  // already configured and merely never ran — that card's whole offer is to
+  // write the config, which would be a no-op and wrong advice.
+  if (setupFlag && !notRunningFlag && onboardPending) { document.body.classList.add('has-onb'); reportHeight(); }
   renderAll();
 });
 
@@ -677,7 +689,9 @@ $('btn-refresh').addEventListener('click', doRefresh);
 // Except "set up statusLine": refreshing can't fix a source that was never
 // wired up, so the click would look dead. Send them where the fix lives.
 $('status').addEventListener('click', () => {
-  if (setupFlag) { api.openSettings(); return; }
+  // "never ran" is not a settings problem — Settings would show a correct
+  // configuration and no way forward. Let the click just retry.
+  if (setupFlag && !notRunningFlag) { api.openSettings(); return; }
   if (stale) doRefresh();
 });
 $('btn-hide').addEventListener('click', () => api.hide());

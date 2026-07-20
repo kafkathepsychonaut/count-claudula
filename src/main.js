@@ -578,9 +578,22 @@ async function poll() {
         if (err.subscriberLatchExpired && loadState().sawStatuslineRateLimits === true) {
           saveState({ sawStatuslineRateLimits: false });
         }
+        // needsSetup means no capture file exists at all. But if OUR command is
+        // already sitting in Claude Code's settings.json, nothing is missing —
+        // it's configured and has simply never executed. That's the normal state
+        // on every non-terminal surface: statusLine belongs to the CLI's terminal
+        // UI, and the IDE extension panel and desktop app never run it. Telling
+        // that user to "set up statusLine" sends them to fix what is already
+        // correct, which is how this looks like a broken app instead of a
+        // wrong-surface problem.
+        let configuredNotRunning = false;
+        if (err.needsSetup) {
+          try { configuredNotRunning = claudeSettings.inspect(captureCommand(app.getPath('userData'))).isMine === true; }
+          catch (_) { /* can't tell — fall back to the plain setup nudge */ }
+        }
         lastError = {
           message: err.message, expired: !!err.expired, noCredential: !!err.noCredential,
-          needsSetup: !!err.needsSetup, at: Date.now(), last: lastGood,
+          needsSetup: !!err.needsSetup, configuredNotRunning, at: Date.now(), last: lastGood,
         };
         if (win) win.webContents.send('usage:error', lastError);
         updateTrayTitleStale();

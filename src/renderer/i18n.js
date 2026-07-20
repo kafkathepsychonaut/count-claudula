@@ -233,6 +233,20 @@
   const SETUP = { en: 'set up statusLine', pt: 'configure o statusLine' };
   for (const k in SETUP) if (DICT[k]) DICT[k].setup = SETUP[k];
 
+  // Configured but never executed. statusLine is a feature of the Claude Code
+  // CLI's terminal UI: the IDE extension panel (VS Code, Cursor, Antigravity…)
+  // and the desktop app never run it, so a user on those surfaces has a perfect
+  // settings.json and no data. Reported at Discord, and the old "set up
+  // statusLine" wording sent them to fix what was already correct.
+  const NOTRUN = { en: 'run Claude Code in a terminal', pt: 'rode o Claude Code num terminal' };
+  for (const k in NOTRUN) if (DICT[k]) DICT[k].notrun = NOTRUN[k];
+
+  const NOTRUN_HINT = {
+    en: 'Your statusLine is set up correctly — Claude Code just hasn’t run it. statusLine only exists in the terminal CLI, not the IDE extension panel or the desktop app. Run `claude` in a terminal (your IDE’s built-in one works) and send one message.',
+    pt: 'Seu statusLine está configurado certo — o Claude Code só nunca o executou. statusLine só existe na CLI de terminal, não no painel da extensão nem no app desktop. Rode `claude` num terminal (o embutido do seu IDE serve) e envie uma mensagem.',
+  };
+  for (const k in NOTRUN_HINT) if (DICT[k]) DICT[k].notrun_hint = NOTRUN_HINT[k];
+
   const SETUP_HINT = {
     en: 'Open Settings → Data source and set the shown command as your statusLine in Claude Code (settings.json). No token, no endpoint — the Terms-safe source.',
     pt: 'Abra Configurações → Fonte de dados e defina o comando exibido como seu statusLine no Claude Code (settings.json). Sem token, sem endpoint — a fonte segura quanto aos Termos.',
