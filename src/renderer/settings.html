@@ -117,6 +117,17 @@
       <span class="switch"><input type="checkbox" id="start" /><span class="slider"></span></span>
     </div>
 
+    <!-- macOS only (settings.js unhides it): the Windows/Linux tray can't render
+         text next to its icon, so there is no menu bar option to offer there -->
+    <div class="field" id="macbar-field" style="display: none;">
+      <label data-i18n="set_macbar">Display</label>
+      <select id="macbar">
+        <option value="widget" data-i18n="macbar_widget">Floating widget</option>
+        <option value="menubar" data-i18n="macbar_menubar">Menu bar</option>
+      </select>
+    </div>
+    <div class="hint" id="macbar-hint" data-i18n="macbar_hint" style="display: none;"></div>
+
     <div class="field">
       <label data-i18n="set_source">Data source</label>
       <!-- data-i18n so applyLabels() translates these too: this dropdown picks

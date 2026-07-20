@@ -42,6 +42,11 @@ On an Intel Mac, build from source.
   **fast mode** and **US-only inference** premiums
 - **API-key / Console accounts** (no subscription windows): the widget switches
   to a cost-first layout — today's spend leads, and the pill shows it too
+- **macOS: menu bar mode** — Settings → *Display* swaps the floating window for
+  the two percentages written straight into the menu bar (`5h 42% · 7d 18%`),
+  with no floating widget and no dock icon; everything else stays in the icon's
+  menu. Windows and Linux keep the floating widget: their trays only render an
+  icon and a tooltip, not text
 - **37 languages**, auto-detecting your OS language (right-to-left included)
 - **3 themes** — *Classic* (light), *Bloodthirsty* (dark, blood-red) and *Zombie*
   (dark, toxic-green) — switch in Settings

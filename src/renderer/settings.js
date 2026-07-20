@@ -66,6 +66,17 @@ async function init() {
   buildThemeOptions(s.theme || 'classic');
   document.getElementById('start').checked = s.startWithOS !== false;
 
+  // macOS: floating widget vs. menu bar text. Hidden entirely elsewhere — the
+  // setting exists in state on every platform, but only darwin can honour it.
+  if (data.platform === 'darwin') {
+    const macSel = document.getElementById('macbar');
+    const macHint = document.getElementById('macbar-hint');
+    document.getElementById('macbar-field').style.display = '';
+    macHint.style.display = '';
+    macSel.value = s.macBar === 'menubar' ? 'menubar' : 'widget';
+    macSel.addEventListener('change', (e) => api.settingsSet('macBar', e.target.value));
+  }
+
   const srcSel = document.getElementById('source');
   const srcHint = document.getElementById('source-hint');
   const srcCmd = document.getElementById('source-cmd');

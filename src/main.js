@@ -6,7 +6,7 @@ const { fetchUsage, credPath } = require('./usage');
 const { todayUsage, setCacheDir, flushCache } = require('./usage-jsonl');
 const { readStatusline, ensureCaptureScript, captureCommand, isCaptureFileName } = require('./usage-statusline');
 const claudeSettings = require('./claude-settings');
-const { makeTrayIcon } = require('./icon');
+const { makeTrayIcon, makeMenuBarIcon } = require('./icon');
 const i18n = require('./renderer/i18n');
 const { autoUpdater } = require('electron-updater');
 
@@ -301,7 +301,19 @@ function getSettings() {
     // Set once when an un-consented endpoint pin was moved back to the clean
     // source, so Settings can say why instead of the switch looking arbitrary.
     endpointResetAt: typeof s.endpointResetAt === 'number' ? s.endpointResetAt : 0,
+    // macOS only: where the numbers live. 'widget' = the floating always-on-top
+    // window (the default, and the only option everywhere else); 'menubar' =
+    // the percentages written as text next to the menu bar icon, with no
+    // floating window and no dock icon. Windows/Linux trays can't render text,
+    // which is why this is a mac-only choice rather than a global one.
+    macBar: s.macBar === 'menubar' ? 'menubar' : 'widget',
   };
+}
+// macOS + the user chose the menu bar: no floating window, no dock icon, the
+// numbers ride in the bar. Every caller has to go through this — reading
+// getSettings().macBar directly would light the mode up on Windows too.
+function menuBarMode() {
+  return process.platform === 'darwin' && getSettings().macBar === 'menubar';
 }
 // setSetting rewrites the whole whitelisted settings object, so any companion
 // field (the consent mark) has to travel with it or it would be dropped here.
@@ -319,6 +331,7 @@ function validSetting(k, v) {
   if (k === 'theme') return ALLOWED_THEMES.includes(v);
   if (k === 'language') return v === 'auto' || (typeof v === 'string' && i18n.LANGS.some((l) => l.code === v));
   if (k === 'source') return v === 'endpoint' || v === 'statusline';
+  if (k === 'macBar') return v === 'widget' || v === 'menubar';
   return false;
 }
 function effectiveLocale() {
@@ -393,7 +406,10 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   win.once('ready-to-show', () => {
-    win.show();
+    // In mac menu bar mode the window still exists and still renders (it's what
+    // the reset countdown and the update banner live in, and one tray click
+    // brings it up), it just doesn't take the screen uninvited.
+    if (!menuBarMode()) win.show();
     // onboard: fresh install that never dismissed the first-run setup card —
     // the renderer only shows it if the statusline source also reports needsSetup
     win.webContents.send('ui:init', { collapsed, mode, extMore, locale: effectiveLocale(), theme: getSettings().theme, onboard: !loadState().onboarded });
@@ -771,6 +787,47 @@ function updateTrayTitle(usage, staleWord) {
   const seven = usage && usage.sevenDay ? usage.sevenDay.utilization + '%' : '--';
   // "5h"/"7d" are language-neutral unit tokens (matching the collapsed pill)
   tray.setToolTip(`Count Claudula · 5h ${five} · 7d ${seven}` + (staleWord ? ` · ${staleWord}` : ''));
+  // macOS menu bar mode: the same two numbers, as text beside the icon. The bar
+  // is shared real estate, so it gets the compact form and a "⚠" instead of the
+  // localized status word — the full sentence is one hover away in the tooltip.
+  // Stale numbers must never read as live, hence the marker rather than nothing.
+  setMenuBarTitle(`5h ${five} · 7d ${seven}` + (staleWord ? ' ⚠' : ''));
+}
+
+// tray.setTitle exists only on macOS. Writing an empty string is what CLEARS
+// the text, so this is also how widget mode takes the bar back.
+function setMenuBarTitle(text) {
+  if (!tray || process.platform !== 'darwin' || typeof tray.setTitle !== 'function') return;
+  try { tray.setTitle(menuBarMode() ? ' ' + text : ''); } catch (_) {}
+}
+
+// Apply the mac display choice: menu bar mode retires the floating window and
+// the dock icon (a menu bar extra with a dock tile and an always-on-top window
+// is exactly the clutter this option exists to remove); widget mode brings both
+// back. No-op off macOS, so Windows/Linux keep the widget unconditionally.
+// `boot` = called before the window's first paint, where ready-to-show already
+// owns the decision to show it. Forcing show() there would put a transparent,
+// unpainted frameless window on screen for a frame or two.
+function applyMacBar(boot) {
+  if (process.platform !== 'darwin') return;
+  if (menuBarMode()) {
+    if (win && !win.isDestroyed()) win.hide();
+    try { if (app.dock) app.dock.hide(); } catch (_) {}
+  } else {
+    // app.dock.show() resolves a promise in current Electron; a rejection there
+    // would escape the try/catch as an unhandled rejection.
+    try { const p = app.dock && app.dock.show(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+    if (!boot) {
+      if (!win || win.isDestroyed()) createWindow();
+      else win.show();
+    }
+  }
+  // Repaint the bar text for the new mode — this is also what CLEARS it when
+  // leaving menu bar mode. Before the first successful poll there's nothing to
+  // repaint and the tooltip still says "loading…", so don't overwrite that.
+  if (lastError) updateTrayTitleStale();
+  else if (lastGood) updateTrayTitle(lastGood);
+  else setMenuBarTitle('5h -- · 7d --');
 }
 
 // A fetch failed: never present the last numbers as live. Reuse the localized
@@ -783,8 +840,12 @@ function updateTrayTitleStale() {
     : e.noCredential ? i18n.t(L, 'nocred')
     : e.unavailable ? i18n.t(L, 'unavailable')
     : i18n.t(L, 'offline');
-  if (lastGood) updateTrayTitle(lastGood, word);
-  else tray.setToolTip('Count Claudula · ' + word);
+  if (lastGood) { updateTrayTitle(lastGood, word); return; }
+  tray.setToolTip('Count Claudula · ' + word);
+  // Nothing has ever succeeded: dashes, not an empty bar. A menu bar extra that
+  // shows only its icon looks like the app is fine — it isn't, and the tooltip
+  // carries the reason.
+  setMenuBarTitle('5h -- · 7d --');
 }
 
 function rebuildTrayMenu() {
@@ -935,17 +996,24 @@ function setupUpdater() {
 }
 
 function buildTray() {
-  tray = new Tray(makeTrayIcon());
+  tray = new Tray(process.platform === 'darwin' ? makeMenuBarIcon() : makeTrayIcon());
   tray.setToolTip('Count Claudula · ' + i18n.t(effectiveLocale(), 'tray_loading'));
   rebuildTrayMenu();
   tray.on('click', toggleWindow);
 }
 
 function openSettings() {
+  // Menu bar mode hides the dock icon, which on macOS makes this an accessory
+  // app: its windows open BEHIND whatever is frontmost and can't take the
+  // keyboard. Settings owns the switch back to widget mode, so it must not open
+  // somewhere the user can't see or reach.
+  if (menuBarMode()) { try { app.focus({ steal: true }); } catch (_) {} }
   if (settingsWin) { settingsWin.show(); settingsWin.focus(); return; }
   settingsWin = new BrowserWindow({
     width: 344,
-    height: 630, // the statusline hint + scope note push the footer past 560 even in en
+    // the statusline hint + scope note push the footer past 560 even in en; mac
+    // adds the widget/menu-bar row and its hint on top of that
+    height: process.platform === 'darwin' ? 692 : 630,
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -1024,6 +1092,8 @@ ipcMain.handle('settings:get', () => ({
   statuslineCmd: captureCommand(app.getPath('userData')),
   updatesSupported: updatesSupported(),
   appVersion: app.getVersion(),
+  // the menu bar choice only exists on macOS — Settings hides the row elsewhere
+  platform: process.platform,
 }));
 ipcMain.handle('update:check', () => runManualCheck());
 // One-click statusLine setup: inspect first (so the renderer can confirm before
@@ -1082,6 +1152,7 @@ ipcMain.on('settings:set', (_e, payload) => {
     if (win) win.webContents.send('ui:theme', th);
     if (settingsWin) settingsWin.webContents.send('ui:theme', th);
   }
+  if (k === 'macBar') applyMacBar();
   if (k === 'source') {
     if (v === 'statusline') ensureCaptureScript(app.getPath('userData'));
     watchStatusline(); // attaches or detaches per the new source
@@ -1106,7 +1177,7 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => { if (win) { win.show(); win.focus(); } });
+  app.on('second-instance', () => { if (win && !menuBarMode()) { win.show(); win.focus(); } });
   app.whenReady().then(() => {
     if (process.platform === 'win32') app.setAppUserModelId('com.countclaudula.app');
     setCacheDir(app.getPath('userData')); // JSONL aggregation survives restarts
@@ -1115,6 +1186,7 @@ if (!gotLock) {
     restorePaceSamples();  // warm the burn-rate buffer so the hint isn't blank after a restart
     createWindow();
     buildTray();
+    applyMacBar(true); // mac: honour the saved widget/menu-bar choice before the first paint
     wirePowerEvents();
     wireDisplayEvents(); // an unplugged monitor must not strand the widget off-screen
     applyStartup();
@@ -1135,5 +1207,5 @@ if (!gotLock) {
     flushCache(); // a pending debounced save must not be lost on quit
   });
   app.on('window-all-closed', (e) => { /* stays alive in the tray */ });
-  app.on('activate', () => { if (!win) createWindow(); else win.show(); });
+  app.on('activate', () => { if (!win) createWindow(); else if (!menuBarMode()) win.show(); });
 }

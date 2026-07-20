@@ -1070,6 +1070,31 @@
   };
   for (const k in SOURCE_SCOPE_NOTE) if (DICT[k]) DICT[k].source_scope_note = SOURCE_SCOPE_NOTE[k];
 
+  // macOS-only display choice: the floating widget, or the percentages written
+  // into the menu bar next to the icon. en/es/pt; every other locale falls back
+  // to English via t() until the rest are translated.
+  const MACBAR = {
+    en: {
+      set_macbar: 'Display',
+      macbar_widget: 'Floating widget',
+      macbar_menubar: 'Menu bar',
+      macbar_hint: 'Menu bar mode puts the two percentages next to the icon at the top of the screen, and hides the floating window and the dock icon. Everything else stays in the menu.',
+    },
+    es: {
+      set_macbar: 'Visualización',
+      macbar_widget: 'Ventana flotante',
+      macbar_menubar: 'Barra de menús',
+      macbar_hint: 'El modo barra de menús muestra los dos porcentajes junto al icono en la parte superior de la pantalla y oculta la ventana flotante y el icono del Dock. Todo lo demás sigue en el menú.',
+    },
+    pt: {
+      set_macbar: 'Exibição',
+      macbar_widget: 'Janela flutuante',
+      macbar_menubar: 'Barra de menus',
+      macbar_hint: 'O modo barra de menus mostra as duas porcentagens ao lado do ícone no topo da tela e esconde a janela flutuante e o ícone do Dock. O resto continua no menu.',
+    },
+  };
+  for (const k in MACBAR) if (DICT[k]) Object.assign(DICT[k], MACBAR[k]);
+
   const ALIAS = { no: 'nb', nn: 'nb', iw: 'he', tl: 'fil', in: 'id' };
 
   function normalize(loc) {

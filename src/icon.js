@@ -72,4 +72,18 @@ function makeTrayIcon() {
   return makeFallbackIcon();
 }
 
-module.exports = { makeTrayIcon };
+// macOS sizes a menu bar image by its POINT size, and doesn't scale it down to
+// fit: the 32px tray sprite above would tower over the bar (~22pt tall) and get
+// clipped. Re-tagging the very same pixels as @2x makes them 16pt — the standard
+// menu bar extra size — and crisp on every retina Mac. Only used on darwin; the
+// Windows/Linux tray takes the 32px image as-is.
+function makeMenuBarIcon() {
+  try {
+    const png = makeTrayIcon().toPNG();
+    const img = nativeImage.createFromBuffer(png, { scaleFactor: 2 });
+    if (!img.isEmpty()) return img;
+  } catch (_) { /* fall back to the plain tray icon */ }
+  return makeTrayIcon();
+}
+
+module.exports = { makeTrayIcon, makeMenuBarIcon };
