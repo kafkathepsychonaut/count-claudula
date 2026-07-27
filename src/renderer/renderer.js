@@ -132,7 +132,7 @@ function reportHeight() {
     if (document.body.classList.contains('collapsed')) return;
     const card = $('card');
     card.style.height = 'auto';          // let it take its natural content height
-    const h = card.offsetHeight + 22;    // + body padding (11px each side)
+    const h = card.offsetHeight;         // fleet frame: window == card, no body padding
     card.style.height = '';
     api.reportHeight(h);
   });

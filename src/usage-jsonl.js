@@ -23,6 +23,7 @@ const readline = require('readline');
 const PRICE = {
   fable:  { in: 10, out: 50, read: 1,    w5: 12.5, w1: 20 },
   opus:   { in: 5,  out: 25, read: 0.5,  w5: 6.25, w1: 10 },
+  opus1:  { in: 15, out: 75, read: 1.5,  w5: 18.75, w1: 30 }, // Opus 4.0/4.1: pre-price-cut, 3x the opus row (see priceOf)
   sonnet: { in: 3,  out: 15, read: 0.3,  w5: 3.75, w1: 6 },
   haiku:  { in: 1,  out: 5,  read: 0.1,  w5: 1.25, w1: 2 },
   other:  { in: 3,  out: 15, read: 0.3,  w5: 3.75, w1: 6 }, // unknown IDs: mid-tier estimate, shown as its own row
@@ -55,6 +56,12 @@ function tierOf(model) {
 function priceOf(model, ts) {
   const id = String(model || '').toLowerCase();
   if (ts < SONNET5_INTRO_END && /sonnet-5(?!\d)/.test(id)) return PRICE.sonnet5;
+  // Opus 4.0 and 4.1 predate the Opus price cut and bill $15/$75 — 3x the
+  // current opus row. Every later Opus (4.5/4.6/4.7/4.8) is $5/$25 and falls
+  // through to PRICE.opus; the line skipped 4.2-4.4 (never shipped). Matches
+  // the dated IDs (claude-opus-4-20250514, claude-opus-4-1-20250805) and the
+  // aliases (claude-opus-4-0, claude-opus-4-1) without catching opus-4-5+.
+  if (/opus-4-(0(?!\d)|1(?!\d)|20\d)/.test(id)) return PRICE.opus1;
   return PRICE[tierOf(model)];
 }
 

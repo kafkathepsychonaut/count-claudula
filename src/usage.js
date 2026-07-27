@@ -224,43 +224,46 @@ async function fetchUsage() {
 
   // Don't hang forever if the connection stalls — abort after 20s so the poller
   // can schedule the next attempt instead of getting stuck on a dead await.
+  // Keep the abort timer armed until the body is fully read and normalized —
+  // clearing it once headers arrived left res.json()/res.text() with no timeout,
+  // so a server that sent headers then stalled the body hung the single-flight
+  // poller forever. The finally covers every await below.
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 20000);
-  let res;
   try {
-    res = await fetch(USAGE_URL, {
+    const res = await fetch(USAGE_URL, {
       headers: { authorization: 'Bearer ' + token, ...OAUTH_HEADERS },
       signal: ctrl.signal,
     });
+
+    if (res.status === 401) throw expiredError(401);
+    if (res.status === 429 || res.status === 529) {
+      const e = new Error('rate limited (' + res.status + ')');
+      e.rateLimited = true;
+      e.status = res.status;
+      e.retryAfter = parseInt(res.headers.get('retry-after'), 10) || 0;
+      throw e;
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      const e = new Error('usage endpoint ' + res.status + ': ' + body.slice(0, 200));
+      e.status = res.status;
+      throw e;
+    }
+
+    const d = await res.json();
+    return {
+      fetchedAt: Date.now(),
+      fiveHour: normalizeWindow(d.five_hour),
+      sevenDay: normalizeWindow(d.seven_day),
+      sevenDayOpus: normalizeWindow(d.seven_day_opus),
+      sevenDaySonnet: normalizeWindow(d.seven_day_sonnet),
+      limits: normalizeLimits(d),
+      overage: normalizeOverage(d),
+    };
   } finally {
     clearTimeout(timer);
   }
-
-  if (res.status === 401) throw expiredError(401);
-  if (res.status === 429 || res.status === 529) {
-    const e = new Error('rate limited (' + res.status + ')');
-    e.rateLimited = true;
-    e.status = res.status;
-    e.retryAfter = parseInt(res.headers.get('retry-after'), 10) || 0;
-    throw e;
-  }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    const e = new Error('usage endpoint ' + res.status + ': ' + body.slice(0, 200));
-    e.status = res.status;
-    throw e;
-  }
-
-  const d = await res.json();
-  return {
-    fetchedAt: Date.now(),
-    fiveHour: normalizeWindow(d.five_hour),
-    sevenDay: normalizeWindow(d.seven_day),
-    sevenDayOpus: normalizeWindow(d.seven_day_opus),
-    sevenDaySonnet: normalizeWindow(d.seven_day_sonnet),
-    limits: normalizeLimits(d),
-    overage: normalizeOverage(d),
-  };
 }
 
 module.exports = { fetchUsage, credPath };

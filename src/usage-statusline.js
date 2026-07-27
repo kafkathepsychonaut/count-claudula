@@ -171,23 +171,32 @@ function toEpochSec(v) {
 // API call predates a reset) are dropped, so a reset isn't masked by a stale
 // high number. Returns { utilization, resetsAt(ISO) } or null.
 function aggregateWindow(entries, key) {
+  const nowSec = Math.floor(Date.now() / 1000);
   const ws = [];
   for (const e of entries) {
     const w = ((e.data && e.data.rate_limits) || {})[key];
     if (w && typeof w.used_percentage === 'number') {
-      ws.push({ pct: w.used_percentage, reset: toEpochSec(w.resets_at) });
+      const reset = toEpochSec(w.resets_at);
+      // Drop windows whose reset boundary has already passed: the percentage
+      // describes a cycle that's over. Without this a 99% bar from a since-reset
+      // window stayed "current" for up to STALE_MS (2h) after the real reset.
+      if (reset != null && reset <= nowSec) continue;
+      ws.push({ pct: w.used_percentage, reset, at: e.at });
     }
   }
   if (!ws.length) return null;
   let curReset = null;
   for (const x of ws) if (x.reset != null && (curReset == null || x.reset > curReset)) curReset = x.reset;
   let maxPct = -Infinity;
+  let winAt = 0;
   for (const x of ws) {
     if (curReset != null && x.reset !== curReset) continue; // stale / pre-reset window
-    if (x.pct > maxPct) maxPct = x.pct;
+    if (x.pct > maxPct) { maxPct = x.pct; winAt = x.at; }
   }
   if (maxPct === -Infinity) return null;
-  return { utilization: Math.round(maxPct), resetsAt: curReset != null ? new Date(curReset * 1000).toISOString() : null };
+  // .at is the capture that produced the shown bar; the caller uses it for
+  // "updated" and strips it before returning.
+  return { utilization: Math.round(maxPct), resetsAt: curReset != null ? new Date(curReset * 1000).toISOString() : null, at: winAt };
 }
 
 // Read every session's capture file and fold them into the same shape
@@ -339,8 +348,11 @@ function readStatusline(userData, opts) {
     throw e;
   }
 
-  // "updated" reflects the freshest session's capture.
-  const fetchedAt = fresh.reduce((mx, j) => Math.max(mx, j.at), 0);
+  // "updated" reflects the capture that produced a shown bar, not merely the
+  // newest fresh file (which may carry no rate_limits and contribute nothing).
+  const fetchedAt = Math.max((fiveHour && fiveHour.at) || 0, (sevenDay && sevenDay.at) || 0);
+  if (fiveHour) delete fiveHour.at;
+  if (sevenDay) delete sevenDay.at;
   return {
     fetchedAt,
     fiveHour,

@@ -11,7 +11,7 @@ const i18n = require('./renderer/i18n');
 const { autoUpdater } = require('electron-updater');
 
 // ---- Config ----
-const WIN_W = 268;
+const WIN_W = 246; // fleet frame: window == card (former 11px body padding removed)
 const H_SIMPLE = 218;     // simple mode (2 bars)
 // Extended mode is content-driven: the renderer measures its content (limit
 // rows, per-model rows and label lengths all vary) and reports the height over
@@ -19,7 +19,7 @@ const H_SIMPLE = 218;     // simple mode (2 bars)
 const H_EXTENDED = 380;   // fallback: fine-detail pane closed
 const H_EXT_MORE = 600;   // fallback: fine-detail pane open
 const H_EXT_MAX = 760;    // sanity cap for renderer-reported heights
-const H_COLLAPSED = 60;
+const H_COLLAPSED = 38; // fleet frame: former 2*11px body padding removed
 const POLL_ACTIVE_MS = 180 * 1000;  // 3 min — the data changes slowly; gentle on the endpoint's rate limit
 const POLL_STATUSLINE_MS = 60 * 1000; // statusLine is a LOCAL file read (no rate limit): the file watcher drives real-time updates, so this timer is only a staleness/countdown fallback and can be far tighter than the endpoint cadence
 const POLL_ERROR_MS = 90 * 1000;    // 90s for NETWORK error (429 uses its own exponential backoff)

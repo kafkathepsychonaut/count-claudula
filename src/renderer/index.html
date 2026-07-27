@@ -34,13 +34,15 @@
       font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink);
       user-select: none; cursor: default; overflow: hidden;
     }
-    body { padding: 11px; }
+    /* fleet frame convention (stoa): window == card exactly — no body padding,
+       no outer shadow (it paints into the transparent area and smears on light
+       backgrounds); inset highlight stays */
     .card {
       position: relative; /* anchors the .tip tooltip */
       height: 100%;
       background: linear-gradient(180deg, var(--ivory-soft), var(--ivory));
       border: 1px solid var(--line); border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(40,30,20,0.22), 0 1px 0 rgba(255,255,255,0.6) inset;
+      box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset;
       display: flex; flex-direction: column; overflow: hidden;
     }
     :focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; border-radius: 6px; }
