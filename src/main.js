@@ -372,7 +372,7 @@ function lockNavigation(bw) {
 
 function createWindow() {
   const st = loadState();
-  collapsed = !!st.collapsed;
+  collapsed = true; // fleet convention: widgets always wake up collapsed (pill)
   mode = st.mode === 'extended' ? 'extended' : 'simple';
   extMore = !!st.extMore;
   const pos = (Number.isFinite(st.x) && Number.isFinite(st.y)) ? clampPosition(st.x, st.y) : defaultPosition();
