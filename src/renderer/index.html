@@ -63,6 +63,7 @@
       transition: background 0.12s, color 0.12s;
     }
     .icon-btn:hover { background: var(--hover); color: var(--ink); }
+    .icon-btn svg { display: block; margin: auto; }
     @keyframes cc-spin { to { transform: rotate(360deg); } }
     .icon-btn.spinning { animation: cc-spin 0.9s linear infinite; color: var(--coral); }
     @media (prefers-reduced-motion: reduce) { .icon-btn.spinning { animation: none; } }
@@ -253,8 +254,10 @@
         <button id="btn-mode" class="icon-btn" data-i18n-title="t_detailed" title="detailed view" aria-label="mode">&#x229e;</button>
         <button id="btn-refresh" class="icon-btn" data-i18n-title="t_refresh" title="refresh" aria-label="refresh">&#x21bb;</button>
         <button id="btn-settings" class="icon-btn" data-i18n-title="set_title" title="Settings" aria-label="settings">&#x2699;&#xfe0e;</button>
-        <button id="btn-collapse" class="icon-btn" data-i18n-title="t_minimize" title="minimize" aria-label="minimize">&#x2212;</button>
-        <button id="btn-hide" class="icon-btn" data-i18n-title="t_hide" title="hide to tray" aria-label="hide to tray">&#x2913;</button>
+        <!-- fleet icon language (argo/pharos/claudula): capsule = collapse to
+             pill · arrow-to-bar = hide to tray -->
+        <button id="btn-collapse" class="icon-btn" data-i18n-title="t_minimize" title="minimize" aria-label="minimize"><svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><rect x="4" y="9" width="16" height="6" rx="3"/></svg></button>
+        <button id="btn-hide" class="icon-btn" data-i18n-title="t_hide" title="hide to tray" aria-label="hide to tray"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v9"/><path d="M8 9l4 4 4-4"/><path d="M6 19h12"/></svg></button>
       </div>
     </div>
 
